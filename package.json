@@ -1,0 +1,53 @@
+{
+  "name": "recally",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:migrate": "node scripts/migrate.js",
+    "worker:enrich": "dotenv run tsx workers/enrichment-worker.ts",
+    "db:migrate:latest": "node scripts/migrate-latest.js",
+    "worker:reminders": "tsx workers/reminder-worker.ts",
+    "telegram:webhook": "node scripts/register-telegram-webhook.js"
+  },
+  "dependencies": {
+    "@auth/pg-adapter": "^1.11.1",
+    "@google/generative-ai": "^0.24.1",
+    "@xyflow/react": "^12.10.1",
+    "cheerio": "^1.2.0",
+    "clsx": "latest",
+    "lucide-react": "latest",
+    "mammoth": "^1.12.0",
+    "nanoid": "latest",
+    "next": "latest",
+    "next-auth": "beta",
+    "pdf-parse": "^2.4.5",
+    "pg": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-force-graph-2d": "^1.29.1",
+    "resend": "latest",
+    "tailwind-merge": "latest",
+    "use-debounce": "^10.1.0",
+    "xlsx": "^0.18.5",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "latest",
+    "dotenv": "^17.3.1",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "postcss": "latest",
+    "tailwindcss": "latest",
+    "tsx": "^4.21.0",
+    "typescript": "latest"
+  }
+}

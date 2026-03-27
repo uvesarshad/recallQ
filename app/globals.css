@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: var(--app-bg);
+  --color-surface: var(--app-surface);
+  --color-surface-2: var(--app-surface-2);
+  --color-border: var(--app-border);
+  --color-border-soft: var(--app-border-soft);
+  --color-text-primary: var(--app-text-primary);
+  --color-text-mid: var(--app-text-mid);
+  --color-text-muted: var(--app-text-muted);
+  --color-brand: var(--app-brand);
+  --color-brand-hover: var(--app-brand-hover);
+  --color-brand-dim: var(--app-brand-dim);
+  --color-brand-glow: var(--app-brand-glow);
+  --color-item-link: var(--app-item-link);
+  --color-item-note: var(--app-item-note);
+  --color-item-file: var(--app-item-file);
+  --color-item-media: var(--app-item-media);
+  --color-item-reminder: var(--app-item-reminder);
+  --font-inter: "Inter", sans-serif;
+  --font-geist-mono: "Geist Mono", monospace;
+  --radius-cards: 10px;
+  --radius-modals: 14px;
+  --radius-buttons: 8px;
+  --radius-input: 8px;
+  --radius-canvas: 12px;
+}
+
+:root,
+html[data-theme="dark"] {
+  --app-bg: #0f0f11;
+  --app-surface: #18181b;
+  --app-surface-2: #27272a;
+  --app-border: #3f3f46;
+  --app-border-soft: #27272a;
+  --app-text-primary: #fafafa;
+  --app-text-mid: #a1a1aa;
+  --app-text-muted: #71717a;
+  --app-brand: #6366f1;
+  --app-brand-hover: #818cf8;
+  --app-brand-dim: #312e81;
+  --app-brand-glow: rgba(99, 102, 241, 0.15);
+  --app-item-link: #38bdf8;
+  --app-item-note: #84cc16;
+  --app-item-file: #fb923c;
+  --app-item-media: #e879f9;
+  --app-item-reminder: #facc15;
+}
+
+html[data-theme="light"] {
+  --app-bg: #f4f4f1;
+  --app-surface: #ffffff;
+  --app-surface-2: #f0efe8;
+  --app-border: #d7d1c6;
+  --app-border-soft: #ebe6dc;
+  --app-text-primary: #171717;
+  --app-text-mid: #4b5563;
+  --app-text-muted: #6b7280;
+  --app-brand: #2f5bea;
+  --app-brand-hover: #2449be;
+  --app-brand-dim: #dbe7ff;
+  --app-brand-glow: rgba(47, 91, 234, 0.18);
+  --app-item-link: #0284c7;
+  --app-item-note: #65a30d;
+  --app-item-file: #ea580c;
+  --app-item-media: #db2777;
+  --app-item-reminder: #ca8a04;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-inter);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-word-smoothing: grayscale;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+@layer base {
+  * {
+    @apply border-border-soft;
+  }
+}
