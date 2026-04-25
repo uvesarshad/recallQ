@@ -2,12 +2,14 @@
   "name": "Recall",
   "short_name": "Recall",
   "description": "Frictionless capture + intelligent organisation + visual recall tool.",
-  "id": "/app",
+  "id": "/",
   "start_url": "/app",
-  "scope": "/app",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f0f11",
   "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "/icon-192.png",

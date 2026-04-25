@@ -1,25 +1,9 @@
 import AppShell from "@/components/AppShell";
-import PWASetup from "@/components/PWASetup";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
-  manifest: "/manifest.json",
-  applicationName: "Recall",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Recall",
-  },
-  formatDetection: {
-    telephone: false,
-  },
-  icons: {
-    apple: "/apple-touch-icon.png",
-  },
-};
 
 export default async function AppLayout({
   children,
@@ -45,9 +29,6 @@ export default async function AppLayout({
   };
 
   return (
-    <>
-      <PWASetup />
-      <AppShell user={user}>{children}</AppShell>
-    </>
+    <AppShell user={user}>{children}</AppShell>
   );
 }

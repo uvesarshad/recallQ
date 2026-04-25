@@ -137,47 +137,70 @@ function ItemNodeCard({ data }: NodeProps<ItemFlowNode>) {
 
   return (
     <div
-      className="w-[260px] rounded-[18px] border border-border bg-surface shadow-[0_16px_48px_rgba(0,0,0,0.18)]"
+      className="w-[280px] overflow-hidden rounded-canvas border border-border bg-surface shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all hover:shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
       style={{
-        borderTop: `3px solid ${getCollectionColor(item.collection_id)}`,
-        clipPath: "polygon(12px 0%, 100% 0%, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0% 100%, 0% 12px)",
+        borderLeft: `4px solid ${getCollectionColor(item.collection_id)}`,
       }}
     >
-      <Handle type="target" position={Position.Top} className="!bg-brand" />
-      <div className="border-b border-border px-4 py-3">
+      <Handle type="target" position={Position.Top} className="!h-1.5 !w-4 !rounded-none !border-none !bg-brand/20 hover:!bg-brand transition-colors" />
+      
+      <div className="border-b border-border/40 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <div
-              className="mb-1 inline-flex items-center rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white"
+              className="mb-2 inline-flex items-center rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white"
               style={{ backgroundColor: typeColors[item.type] }}
             >
               {item.type}
             </div>
-            <div className="line-clamp-2 text-sm font-semibold text-text-primary">{getTitle(item)}</div>
+            <div className="line-clamp-2 text-[13px] font-semibold leading-snug text-text-primary">
+              {getTitle(item)}
+            </div>
           </div>
           <button
-            className="rounded-full p-1 text-text-muted hover:bg-surface-2"
+            className={`flex-shrink-0 rounded-lg p-1.5 transition-colors ${
+              item.canvas_pinned 
+                ? "bg-brand/10 text-brand" 
+                : "text-text-muted hover:bg-surface-2 hover:text-text-primary"
+            }`}
             onClick={(event) => {
               event.stopPropagation();
               data.onTogglePinned(item);
             }}
+            title={item.canvas_pinned ? "Unpin from canvas" : "Pin to canvas"}
           >
-            {item.canvas_pinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+            {item.canvas_pinned ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
-      <div className="space-y-3 px-4 py-3">
-        <p className="line-clamp-3 text-xs text-text-mid">{item.summary || item.raw_url || item.source}</p>
-        <div className="flex flex-wrap gap-1">
+      
+      <div className="space-y-3 bg-surface/30 px-4 py-3">
+        <p className="line-clamp-3 text-[11px] leading-relaxed text-text-mid">
+          {item.summary || item.raw_url || item.source}
+        </p>
+        
+        <div className="flex flex-wrap items-center gap-1.5">
           {item.tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="rounded-full bg-bg px-2 py-1 text-[10px] text-text-muted">
+            <span 
+              key={tag} 
+              className="rounded bg-bg/80 border border-border/30 px-1.5 py-0.5 text-[9px] font-medium text-text-muted"
+            >
               {tag}
             </span>
           ))}
-          {!item.enriched ? <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] text-brand">Enriching</span> : null}
+          {!item.enriched && (
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75"></span>
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand"></span>
+              </span>
+              <span className="text-[10px] font-medium text-brand/80">Processing</span>
+            </div>
+          )}
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-brand" />
+      
+      <Handle type="source" position={Position.Bottom} className="!h-1.5 !w-4 !rounded-none !border-none !bg-brand/20 hover:!bg-brand transition-colors" />
     </div>
   );
 }
@@ -380,93 +403,104 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
 
   return (
     <div className="relative h-[calc(100vh-1rem)] overflow-hidden bg-bg">
-      <div className="absolute left-4 right-4 top-4 z-20 flex max-w-[28rem] flex-col gap-3">
-        <div className="flex items-center gap-2 rounded-modals border border-border bg-surface/90 p-2 backdrop-blur">
+      {/* Integrated Control Panel */}
+      <div className="absolute left-6 top-6 z-20 flex w-80 flex-col gap-4">
+        {/* Mode Toggle & Status */}
+        <div className="flex items-center gap-1.5 rounded-2xl border border-border/50 bg-surface/80 p-1.5 shadow-2xl backdrop-blur-xl">
           <button
-            className={`rounded-buttons px-3 py-2 text-xs ${view === "canvas" ? "bg-brand text-white" : "text-text-mid"}`}
+            className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-all ${
+              view === "canvas" ? "bg-brand text-white shadow-lg shadow-brand/20" : "text-text-mid hover:text-text-primary"
+            }`}
             onClick={() => setView("canvas")}
           >
             Canvas
           </button>
           <button
-            className={`rounded-buttons px-3 py-2 text-xs ${view === "graph" ? "bg-brand text-white" : "text-text-mid"}`}
+            className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-all ${
+              view === "graph" ? "bg-brand text-white shadow-lg shadow-brand/20" : "text-text-mid hover:text-text-primary"
+            }`}
             onClick={() => setView("graph")}
           >
             Graph
           </button>
-          <button className="rounded-buttons p-2 text-text-mid hover:bg-surface-2" onClick={() => void loadGraph()}>
-            <RefreshCw className="h-4 w-4" />
+          <div className="h-4 w-[1px] bg-border/50" />
+          <button 
+            className="group rounded-xl p-2 text-text-muted transition-all hover:bg-surface-2 hover:text-brand" 
+            onClick={() => void loadGraph()}
+            title="Refresh map"
+          >
+            <RefreshCw className={`h-4 w-4 transition-transform duration-500 group-active:rotate-180 ${loading ? "animate-spin" : ""}`} />
           </button>
-          <div className="ml-auto hidden text-[11px] text-text-muted sm:block">
-            {visibleNodes.length} nodes
-          </div>
         </div>
 
-        <div className="rounded-modals border border-border bg-surface/90 p-4 backdrop-blur">
-          <div className="mb-3 flex items-start justify-between gap-3">
+        {/* Filters & Search */}
+        <div className="flex flex-col gap-5 rounded-2xl border border-border/50 bg-surface/80 p-5 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center justify-between">
             <div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">Map controls</div>
-              <p className="mt-1 text-sm text-text-primary">
-                Filter the knowledge map before you rearrange or inspect it.
-              </p>
+              <h2 className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Knowledge Map</h2>
+              <p className="mt-1 text-[13px] font-medium text-text-primary">Manage your view</p>
             </div>
-            <button type="button" onClick={resetFilters} className="text-xs text-brand hover:text-brand-hover">
-              Reset
+            <button 
+              type="button" 
+              onClick={resetFilters} 
+              className="rounded-lg bg-brand/10 px-2 py-1 text-[10px] font-bold text-brand hover:bg-brand/20 transition-colors"
+            >
+              RESET
             </button>
           </div>
 
-          <div className="flex items-center gap-2 rounded-input border border-border bg-bg px-3 py-2">
-            <Search className="h-4 w-4 text-text-muted" />
+          <div className="group relative flex items-center gap-2 rounded-xl border border-border/40 bg-bg/50 px-3 py-2.5 transition-all focus-within:border-brand/50 focus-within:ring-2 focus-within:ring-brand/10">
+            <Search className="h-4 w-4 text-text-muted group-focus-within:text-brand transition-colors" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter by title, URL, tag, or source"
-              className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+              placeholder="Search by title, tag, or source..."
+              className="w-full bg-transparent text-[13px] text-text-primary outline-none placeholder:text-text-muted"
             />
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {allTypes.map((type) => {
-              const active = activeTypes.includes(type);
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggleType(type)}
-                  className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                    active
-                      ? "border-transparent text-white"
-                      : "border-border bg-bg text-text-mid hover:border-brand/40 hover:text-text-primary"
-                  }`}
-                  style={active ? { backgroundColor: typeColors[type] } : undefined}
-                >
-                  {typeLabels[type]}
-                </button>
-              );
-            })}
+          <div className="space-y-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted/70">Item Types</div>
+            <div className="flex flex-wrap gap-2">
+              {allTypes.map((type) => {
+                const active = activeTypes.includes(type);
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => toggleType(type)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all ${
+                      active
+                        ? "border-transparent text-white shadow-md"
+                        : "border-border/40 bg-bg/40 text-text-muted hover:border-brand/30 hover:text-text-primary"
+                    }`}
+                    style={active ? { backgroundColor: typeColors[type], boxShadow: `0 4px 12px ${typeColors[type]}33` } : undefined}
+                  >
+                    {typeLabels[type]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setShowPinnedOnly((current) => !current)}
-              className={`flex items-center justify-between rounded-cards border px-3 py-3 text-sm transition ${
+              className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-all ${
                 showPinnedOnly
-                  ? "border-brand bg-brand/10 text-text-primary"
-                  : "border-border bg-bg text-text-mid hover:text-text-primary"
+                  ? "border-brand bg-brand/10 text-brand shadow-inner"
+                  : "border-border/40 bg-bg/40 text-text-muted hover:border-brand/20 hover:text-text-primary"
               }`}
             >
-              <span className="inline-flex items-center gap-2">
-                <Filter className="h-4 w-4" />
-                Pinned only
-              </span>
-              {showPinnedOnly ? <Pin className="h-4 w-4 text-brand" /> : <PinOff className="h-4 w-4" />}
+              {showPinnedOnly ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+              <span className="text-[10px] font-bold uppercase tracking-wider">Pinned Only</span>
             </button>
 
-            <div className="rounded-cards border border-border bg-bg px-3 py-3">
-              <div className="mb-2 inline-flex items-center gap-2 text-sm text-text-primary">
-                <SlidersHorizontal className="h-4 w-4 text-brand" />
-                Relation strength
+            <div className="flex flex-col gap-2 rounded-xl border border-border/40 bg-bg/40 p-3">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                <span>Strength</span>
+                <span className="text-brand">{minStrength.toFixed(2)}</span>
               </div>
               <input
                 type="range"
@@ -475,39 +509,52 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
                 step={0.05}
                 value={minStrength}
                 onChange={(event) => setMinStrength(Number(event.target.value))}
-                className="w-full accent-brand"
+                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-border/40 accent-brand"
               />
-              <div className="mt-1 text-xs text-text-muted">Show links from {minStrength.toFixed(2)} and up</div>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <StatCard label="Visible nodes" value={String(visibleNodes.length)} />
-            <StatCard label="Visible links" value={String(visibleEdges.length)} />
-            <StatCard label="Pinned" value={String(pinnedCount)} />
+          <div className="flex items-center justify-between border-t border-border/20 pt-4 text-[11px] font-medium text-text-muted">
+            <div className="flex flex-col items-center">
+              <span className="text-text-primary">{visibleNodes.length}</span>
+              <span>Nodes</span>
+            </div>
+            <div className="h-6 w-[1px] bg-border/20" />
+            <div className="flex flex-col items-center">
+              <span className="text-text-primary">{visibleEdges.length}</span>
+              <span>Links</span>
+            </div>
+            <div className="h-6 w-[1px] bg-border/20" />
+            <div className="flex flex-col items-center">
+              <span className="text-text-primary">{pinnedCount}</span>
+              <span>Pinned</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="absolute bottom-4 left-4 z-20 hidden w-72 rounded-modals border border-border bg-surface/90 p-4 backdrop-blur xl:block">
-        <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">Legend</div>
-        <div className="mt-3 space-y-2">
-          {allTypes.map((type) => (
-            <div key={type} className="flex items-center justify-between text-sm text-text-primary">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: typeColors[type] }} />
-                {typeLabels[type]}
-              </span>
-              <span className="text-xs text-text-muted">
-                {visibleNodes.filter((node) => node.type === type).length}
-              </span>
-            </div>
-          ))}
+        {/* Legend (Collapsible or subtle) */}
+        <div className="rounded-2xl border border-border/50 bg-surface/80 p-4 shadow-xl backdrop-blur-xl">
+           <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
+             <span>Relationship Legend</span>
+             <div className="h-2 w-2 rounded-full bg-brand animate-pulse" />
+           </div>
+           <div className="space-y-2">
+             {allTypes.map((type) => (
+               <div key={type} className="flex items-center justify-between text-[11px] text-text-mid">
+                 <div className="flex items-center gap-2">
+                   <div className="h-1.5 w-3 rounded-full" style={{ backgroundColor: typeColors[type] }} />
+                   <span>{typeLabels[type]}</span>
+                 </div>
+                 <span className="font-mono text-[9px] text-text-muted/60">
+                   {visibleNodes.filter((node) => node.type === type).length} items
+                 </span>
+               </div>
+             ))}
+           </div>
+           <p className="mt-4 text-[10px] leading-relaxed text-text-muted/80 bg-bg/30 p-2.5 rounded-lg border border-border/20">
+             Drag cards in <span className="text-brand font-semibold">Canvas</span> to organize. Use <span className="text-brand font-semibold">Graph</span> for cluster analysis.
+           </p>
         </div>
-        <div className="mt-4 rounded-cards border border-border bg-bg px-3 py-3 text-xs text-text-muted">
-          Drag cards in canvas mode to arrange your space. Graph mode is better for spotting dense clusters and strong relation overlap.
-        </div>
-        <div className="mt-3 text-xs text-text-muted">Average visible link strength: {averageStrength}</div>
       </div>
 
       {loading ? (
@@ -587,23 +634,47 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
               }
 
               const label = getTitle(graphNode);
-              const fontSize = 11 / globalScale;
-              const size = 18;
+              const fontSize = 12 / globalScale;
+              const radius = 6;
+              
               ctx.save();
               ctx.translate(graphNode.x, graphNode.y);
-              ctx.rotate(Math.PI / 4);
+              
+              // Node Glow
+              const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 3);
+              gradient.addColorStop(0, `${graphNode.nodeTypeColor}33`);
+              gradient.addColorStop(1, "transparent");
+              ctx.fillStyle = gradient;
               ctx.beginPath();
-              ctx.rect(-size / 2, -size / 2, size, size);
-              ctx.fillStyle = graphNode.color;
+              ctx.arc(0, 0, radius * 3, 0, 2 * Math.PI);
               ctx.fill();
+
+              // Outer Ring
               ctx.beginPath();
-              ctx.arc(0, 0, 4.5, 0, 2 * Math.PI, false);
+              ctx.arc(0, 0, radius + 2 / globalScale, 0, 2 * Math.PI);
+              ctx.strokeStyle = graphNode.color;
+              ctx.lineWidth = 2 / globalScale;
+              ctx.stroke();
+
+              // Core Circle
+              ctx.beginPath();
+              ctx.arc(0, 0, radius, 0, 2 * Math.PI);
               ctx.fillStyle = graphNode.nodeTypeColor;
               ctx.fill();
+              
+              // Text Label
               ctx.restore();
-              ctx.font = `600 ${fontSize}px "Geist Mono", monospace`;
-              ctx.fillStyle = "#a1a1aa";
-              ctx.fillText(label, graphNode.x + 14, graphNode.y + 4);
+              ctx.font = `500 ${fontSize}px "Inter", sans-serif`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "top";
+              
+              // Text Shadow/Background for readability
+              const textWidth = ctx.measureText(label).width;
+              ctx.fillStyle = "rgba(15, 15, 17, 0.6)";
+              ctx.fillRect(graphNode.x - textWidth / 2 - 4, graphNode.y + radius + 4, textWidth + 8, fontSize + 4);
+              
+              ctx.fillStyle = "#fafafa";
+              ctx.fillText(label, graphNode.x, graphNode.y + radius + 6);
             }}
             linkCanvasObjectMode={() => "after"}
             linkCanvasObject={(link, ctx: CanvasRenderingContext2D) => {
@@ -625,9 +696,13 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
               }
               const midX = (start.x + end.x) / 2;
               const midY = (start.y + end.y) / 2;
-              ctx.fillStyle = "#71717a";
-              ctx.font = '10px "Geist Mono", monospace';
+              
+              ctx.save();
+              ctx.fillStyle = "rgba(161, 161, 170, 0.6)";
+              ctx.font = '8px "Geist Mono", monospace';
+              ctx.textAlign = "center";
               ctx.fillText(relationLabels[graphLink.relation_type], midX, midY);
+              ctx.restore();
             }}
             onNodeClick={(node) => setSelectedId(typeof node.id === "string" ? node.id : null)}
           />
