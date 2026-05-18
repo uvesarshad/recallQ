@@ -99,22 +99,28 @@ export default async function AppFeedPage({
   return (
     <div>
       {saved && (
-        <div className="mx-auto mt-6 max-w-7xl rounded-buttons border border-brand/30 bg-brand/10 px-4 py-3 text-sm text-text-primary">
-          Saved to Recall. Enrichment is queued in the background.
+        <div className="mx-auto mt-4 max-w-7xl px-5">
+          <div className="rounded-buttons border border-brand/30 bg-brand/10 px-4 py-3 text-sm text-text-primary">
+            Saved to Recall. Enrichment is queued in the background.
+          </div>
         </div>
       )}
       {error && (
-        <div className="mx-auto mt-6 max-w-7xl rounded-buttons border border-border bg-surface px-4 py-3 text-sm text-text-mid">
-          {error === "unsupported_file_type"
-            ? "That file type is not supported yet."
-            : error === "limit_reached"
-              ? "You have reached your current plan limit for new saves."
-              : "The last save attempt did not complete."}
+        <div className="mx-auto mt-4 max-w-7xl px-5">
+          <div className="rounded-buttons border border-border bg-surface px-4 py-3 text-sm text-text-mid">
+            {error === "unsupported_file_type"
+              ? "That file type is not supported yet."
+              : error === "limit_reached"
+                ? "You have reached your current plan limit for new saves."
+                : "The last save attempt did not complete."}
+          </div>
         </div>
       )}
       {dbError && (
-        <div className="mx-auto mt-6 max-w-7xl rounded-buttons border border-border bg-surface px-4 py-3 text-sm text-text-mid">
-          Could not connect to the database. Check that PostgreSQL is running and <code className="font-mono text-xs">DATABASE_URL</code> is correct, then refresh.
+        <div className="mx-auto mt-4 max-w-7xl px-5">
+          <div className="rounded-buttons border border-border bg-surface px-4 py-3 text-sm text-text-mid">
+            Could not connect to the database. Check that PostgreSQL is running and <code className="font-mono text-xs">DATABASE_URL</code> is correct, then refresh.
+          </div>
         </div>
       )}
 

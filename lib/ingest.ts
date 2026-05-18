@@ -114,6 +114,22 @@ export async function ingestItem(payload: IngestPayload) {
     ]
   );
 
+  // Track storage for all item types.
+  let storageDelta = 0;
+  if (payload.fileBuffer) {
+    storageDelta = payload.fileBuffer.length;
+  } else if (payload.raw_text) {
+    storageDelta = Buffer.byteLength(payload.raw_text, "utf8");
+  } else if (payload.raw_url) {
+    storageDelta = Buffer.byteLength(payload.raw_url, "utf8");
+  }
+  if (storageDelta > 0) {
+    await db.query(
+      "UPDATE users SET storage_used_bytes = storage_used_bytes + $1 WHERE id = $2",
+      [storageDelta, payload.userId]
+    );
+  }
+
   if (inferred.reminderAt) {
     // Check reminder cap before inserting.
     const maxReminders = getMaxReminders(user.plan as Plan);

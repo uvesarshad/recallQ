@@ -36,6 +36,7 @@ export default function ItemCard({
   const [comment, setComment] = useState("");
   const [applied, setApplied] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const router = useRouter();
 
   const typeIcon = {
@@ -80,8 +81,8 @@ export default function ItemCard({
   }
 
   async function deleteItem() {
-    const confirmed = window.confirm("Delete this item?");
-    if (!confirmed) return;
+    if (!deletePending) { setDeletePending(true); return; }
+    setDeletePending(false);
     await fetch(`/api/items/${item.id}`, { method: "DELETE" });
     router.refresh();
   }
@@ -181,12 +182,29 @@ export default function ItemCard({
                 <Bell className="h-3.5 w-3.5" /> Remind
               </button>
             </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); void deleteItem(); }}
-              className="flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] text-text-muted hover:bg-surface-2 hover:text-rose-400"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {deletePending ? (
+              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setDeletePending(false)}
+                  className="rounded px-2 py-1.5 text-[11px] text-text-muted hover:bg-surface-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); void deleteItem(); }}
+                  className="rounded px-2 py-1.5 text-[11px] font-medium text-rose-400 hover:bg-rose-400/10"
+                >
+                  Delete
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); void deleteItem(); }}
+                className="flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] text-text-muted hover:bg-surface-2 hover:text-rose-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         ) : null}
 

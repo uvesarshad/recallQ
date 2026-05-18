@@ -132,8 +132,8 @@ export async function POST(req: Request) {
 
   // Handle content ingest (Phase 2.11)
   // Check if user is linked
-  const userResult = await db.query(
-    "SELECT id FROM users WHERE telegram_chat_id = $1",
+  const userResult = await db.query<{ id: string; timezone: string | null }>(
+    "SELECT id, timezone FROM users WHERE telegram_chat_id = $1",
     [chatId]
   );
 
@@ -146,6 +146,7 @@ export async function POST(req: Request) {
   }
 
   const userId = userResult.rows[0].id;
+  const userTimezone = userResult.rows[0].timezone ?? "UTC";
 
   if (command === "help") {
     await sendTelegramMessage(chatId, getHelpMessage());
@@ -160,13 +161,13 @@ export async function POST(req: Request) {
 
   if (command === "ask") {
     const question = commandPayload || "";
-    const reply = await answerQuestionReply(userId, question);
+    const reply = await answerQuestionReply(userId, question, userTimezone);
     await sendTelegramMessage(chatId, reply);
     return apiOk({ ok: true });
   }
 
   if (!message.document && !message.photo && isLikelyQuestion(trimmedText)) {
-    const reply = await answerQuestionReply(userId, trimmedText);
+    const reply = await answerQuestionReply(userId, trimmedText, userTimezone);
     await sendTelegramMessage(chatId, reply);
     return apiOk({ ok: true });
   }
@@ -274,11 +275,11 @@ function isLikelyQuestion(input: string) {
   return /^(what|which|when|where|why|how|who|find|show me|search|summarize|do i have|have i saved)\b/.test(lowered);
 }
 
-async function answerQuestionReply(userId: string, question: string) {
+async function answerQuestionReply(userId: string, question: string, timezone: string) {
   const response = await answerArchiveQuestion({
     userId,
     query: question,
-    timezone: "IST",
+    timezone,
   });
 
   const sources = response.citations

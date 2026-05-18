@@ -14,14 +14,14 @@ export async function POST(req: Request) {
 
   // Enforce per-day chat query limit atomically.
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const quotaResult = await db.query<{ plan: string; chat_queries_today: number; chat_queries_reset_date: string | null }>(
-    "SELECT plan, chat_queries_today, chat_queries_reset_date FROM users WHERE id = $1",
+  const quotaResult = await db.query<{ plan: string; chat_queries_today: number; chat_queries_reset_date: string | null; timezone: string | null }>(
+    "SELECT plan, chat_queries_today, chat_queries_reset_date, timezone FROM users WHERE id = $1",
     [user.id]
   );
   if (quotaResult.rowCount === 0) {
     return new Response("User not found", { status: 404 });
   }
-  const { plan, chat_queries_today, chat_queries_reset_date } = quotaResult.rows[0];
+  const { plan, chat_queries_today, chat_queries_reset_date, timezone } = quotaResult.rows[0];
   const limit = getChatQueryLimit(plan as "free" | "starter" | "pro");
 
   if (chat_queries_reset_date !== today) {
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const stream = await streamArchiveAnswer({
       userId: user.id,
       query: lastUserMessage.content,
-      timezone: "IST",
+      timezone: timezone ?? "UTC",
     });
 
     return new Response(stream, {

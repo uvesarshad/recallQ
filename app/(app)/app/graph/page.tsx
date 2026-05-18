@@ -1,5 +1,5 @@
-import KnowledgeMap from "@/components/KnowledgeMap";
+import { redirect } from "next/navigation";
 
 export default function AppGraphPage() {
-  return <KnowledgeMap initialMode="graph" />;
+  redirect("/app/canvas");
 }

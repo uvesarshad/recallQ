@@ -218,7 +218,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-[calc(100dvh-4.25rem)] min-h-[34rem] p-3 md:p-5">
+    <div className="mx-auto h-[calc(100dvh-4rem)] min-h-[34rem] max-w-7xl px-4 py-4 md:px-6">
       <div className="grid h-full gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-modals border border-border bg-surface">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
