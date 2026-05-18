@@ -16,6 +16,7 @@
     "telegram:webhook": "node scripts/register-telegram-webhook.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
     "@auth/pg-adapter": "^1.11.1",
     "@google/generative-ai": "^0.24.1",
     "@types/web-push": "^3.6.4",
@@ -27,6 +28,7 @@
     "nanoid": "latest",
     "next": "latest",
     "next-auth": "beta",
+    "openai": "^6.38.0",
     "pdf-parse": "^2.4.5",
     "pg": "latest",
     "react": "latest",

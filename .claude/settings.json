@@ -4,7 +4,8 @@
       "Bash(Move-Item \"e:\\\\Projects\\\\recallQ\\\\app\\\\\\(app\\)\\\\settings\\\\appearance\\\\page.tsx\" \"e:\\\\Projects\\\\recallQ\\\\app\\\\\\(app\\)\\\\settings\\\\appearance\\\\appearance-settings-client.tsx\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); ['next-auth','@auth/pg-adapter','next'].forEach\\(k=>console.log\\(k,p.dependencies[k]||p.devDependencies?.[k]\\)\\)\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('next-auth version:', p.dependencies['next-auth']\\)\")",
-      "Bash(node -e \"const {Pool} = require\\('pg'\\); const p = new Pool\\({connectionString: process.env.DATABASE_URL || 'postgresql://localhost/test'}\\); p.query\\('SELECT 1'\\).then\\(\\(\\)=>console.log\\('ok'\\)\\).catch\\(e=>console.error\\('db error:',e.message\\)\\).finally\\(\\(\\)=>p.end\\(\\)\\)\")"
+      "Bash(node -e \"const {Pool} = require\\('pg'\\); const p = new Pool\\({connectionString: process.env.DATABASE_URL || 'postgresql://localhost/test'}\\); p.query\\('SELECT 1'\\).then\\(\\(\\)=>console.log\\('ok'\\)\\).catch\\(e=>console.error\\('db error:',e.message\\)\\).finally\\(\\(\\)=>p.end\\(\\)\\)\")",
+      "Bash(python -c \"import sys,json; p=json.load\\(sys.stdin\\); deps={**p.get\\('dependencies',{}\\), **p.get\\('devDependencies',{}\\)}; [print\\(k,v\\) for k,v in deps.items\\(\\) if any\\(x in k for x in ['gemini','google','genkit','openai','anthropic','ai']\\)]\")"
     ]
   }
 }

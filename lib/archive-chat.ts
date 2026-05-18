@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { embedText, getGeminiModel, sanitizeForPrompt } from "@/lib/gemini";
+import { embedText, sanitizeForPrompt } from "@/lib/gemini";
+import { streamGenerate, generateText } from "@/lib/llm";
 import { hasVectorSupport } from "@/lib/vector";
 
 export type ArchiveCitation = {
@@ -101,25 +102,19 @@ export async function streamArchiveAnswer({
     return sseStaticStream(encoder, ctx.earlyAnswer, ctx.citations);
   }
 
-  const model = getGeminiModel();
-  const geminiStream = await model.generateContentStream([
-    { text: ctx.systemPrompt },
-    { text: `Question: ${sanitizeForPrompt(trimmedQuery, 500)}` },
-  ]);
-
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of geminiStream.stream) {
-          const text = chunk.text();
-          if (text) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-          }
+        for await (const text of streamGenerate(
+          ctx.systemPrompt,
+          `Question: ${sanitizeForPrompt(trimmedQuery, 500)}`,
+        )) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
         }
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, citations: ctx.citations })}\n\n`));
       } catch (err) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`));
-        console.error("Gemini stream error:", err);
+        console.error("LLM stream error:", err);
       } finally {
         controller.close();
       }
@@ -148,13 +143,10 @@ export async function answerArchiveQuestion({
     return { answer: ctx.earlyAnswer, citations: ctx.citations };
   }
 
-  const model = getGeminiModel();
-  const result = await model.generateContent([
-    { text: ctx.systemPrompt },
-    { text: `Question: ${sanitizeForPrompt(trimmedQuery, 500)}` },
-  ]);
-
-  const answer = result.response.text().trim() || "I couldn't generate an answer from your saved items.";
+  const raw = await generateText(
+    `${ctx.systemPrompt}\n\nQuestion: ${sanitizeForPrompt(trimmedQuery, 500)}`,
+  );
+  const answer = raw.trim() || "I couldn't generate an answer from your saved items.";
   return { answer, citations: ctx.citations };
 }
 

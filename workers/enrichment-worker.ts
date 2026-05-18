@@ -8,12 +8,12 @@ const pdf = require("pdf-parse");
 import * as xlsx from "xlsx";
 
 import { db } from "../lib/db";
-import { embedText, getGeminiModel, sanitizeForPrompt } from "../lib/gemini";
+import { embedText, sanitizeForPrompt } from "../lib/gemini";
+import { generateText } from "../lib/llm";
 import { logger } from "../lib/logger";
 import { clampStrength, getHostname, orderRelationPair } from "../lib/relations";
 import { hasVectorSupport } from "../lib/vector";
 
-const model = getGeminiModel();
 
 function resolveUrl(candidate: string | undefined, baseUrl: string) {
   if (!candidate) {
@@ -212,8 +212,7 @@ Return this exact shape:
 Today's date: ${new Date().toISOString()}. Default time: 09:00 IST.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text().replace(/```json|```/g, "").trim();
+    const responseText = (await generateText(prompt)).replace(/```json|```/g, "").trim();
     const enriched = JSON.parse(responseText) as {
       title?: string;
       summary?: string;

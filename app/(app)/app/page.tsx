@@ -74,8 +74,24 @@ export default async function AppFeedPage({
   if (!session?.user?.id) {
     redirect("/login");
   }
-  const { items, hasMore, nextCursor } = await getItems(session.user.id);
-  const folders = await getFolders(session.user.id);
+
+  let items: ArchiveItem[] = [];
+  let folders: CollectionRecord[] = [];
+  let hasMore = false;
+  let nextCursor: string | null = null;
+  let dbError = false;
+
+  try {
+    const itemsResult = await getItems(session.user.id);
+    items = itemsResult.items;
+    hasMore = itemsResult.hasMore;
+    nextCursor = itemsResult.nextCursor;
+    folders = await getFolders(session.user.id);
+  } catch (err) {
+    console.error("Feed page DB error:", err);
+    dbError = true;
+  }
+
   const params = await searchParams;
   const saved = params?.saved === "true";
   const error = params?.error;
@@ -96,8 +112,13 @@ export default async function AppFeedPage({
               : "The last save attempt did not complete."}
         </div>
       )}
+      {dbError && (
+        <div className="mx-auto mt-6 max-w-7xl rounded-buttons border border-border bg-surface px-4 py-3 text-sm text-text-mid">
+          Could not connect to the database. Check that PostgreSQL is running and <code className="font-mono text-xs">DATABASE_URL</code> is correct, then refresh.
+        </div>
+      )}
 
-      {items.length === 0 ? (
+      {!dbError && items.length === 0 ? (
         <>
           <FeedPageClient initialItems={[]} folders={folders} initialHasMore={false} initialNextCursor={null} />
           <OnboardingBanner />
