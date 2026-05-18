@@ -19,6 +19,17 @@ export function getGeminiEmbeddingModel() {
   return client.getGenerativeModel({ model: "text-embedding-004" });
 }
 
+/**
+ * Wraps untrusted content in XML-delimited blocks and strips ASCII control
+ * characters so it cannot escape the prompt instruction context.
+ */
+export function sanitizeForPrompt(value: string | null | undefined, maxLength = 3000): string {
+  if (!value) return "";
+  // Strip ASCII control characters (except tab/newline/CR) and null bytes.
+  const cleaned = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").slice(0, maxLength);
+  return `<user_content>${cleaned}</user_content>`;
+}
+
 export async function embedText(text: string) {
   const normalized = text.trim();
   if (!normalized) {

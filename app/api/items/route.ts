@@ -64,7 +64,7 @@ export async function GET(req: Request) {
             items.created_at,
             items.updated_at,
             items.raw_url,
-            LEFT(items.raw_text, 240) AS raw_text,
+            LEFT(items.raw_text, 240) AS raw_text, -- truncated for list performance; single-item GET returns full value
             items.collection_id,
             collections.name AS collection_name,
             items.canvas_x,

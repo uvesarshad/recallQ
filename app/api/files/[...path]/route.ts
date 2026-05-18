@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { getFileBuffer } from "@/lib/storage";
 import { db } from "@/lib/db";
 
@@ -32,12 +33,19 @@ export async function GET(
 
   const item = itemResult.rows[0];
 
+  // Guard against path traversal: the stored path must be inside the configured base dir.
+  if (!item.file_path || !item.file_path.startsWith(env.FILES_BASE_PATH)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   try {
     const buffer = await getFileBuffer(item.file_path);
+    // Encode the filename for Content-Disposition to prevent header injection.
+    const safeFilename = encodeURIComponent((filename ?? "file").replace(/[\r\n]/g, ""));
     return new Response(buffer, {
       headers: {
         "Content-Type": item.file_mime_type || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${filename}"`,
+        "Content-Disposition": `inline; filename*=UTF-8''${safeFilename}`,
       },
     });
   } catch {

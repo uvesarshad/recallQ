@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import ProfileSettingsClient from "./profile-settings-client";
 
-export default function ProfileSettingsPage() {
-  redirect("/app/settings/profile");
+export default function ProfilePage() {
+  return <ProfileSettingsClient />;
 }

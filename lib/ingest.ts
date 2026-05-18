@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { canUserSave, getPlanLimits, Plan } from "@/lib/plan-limits";
+import { getPlanLimits, getMaxReminders, Plan } from "@/lib/plan-limits";
 import { inferCaptureActions } from "./comment-actions";
 import { isAcceptedMimeType, saveFile } from "./storage";
 
@@ -26,32 +26,47 @@ export interface IngestPayload {
 }
 
 export async function ingestItem(payload: IngestPayload) {
-  // Get user plan and usage
+  // Read plan info first (needed for file-size check and limit cap value).
   const userResult = await db.query(
-    "SELECT plan, saves_this_month FROM users WHERE id = $1",
+    "SELECT plan, saves_this_month, storage_used_bytes FROM users WHERE id = $1",
     [payload.userId]
   );
-  
+
   if (userResult.rowCount === 0) {
     throw new Error("User not found");
   }
 
   const user = userResult.rows[0];
+  const limits = getPlanLimits(user.plan as Plan);
 
-  if (!canUserSave(user.plan as Plan, user.saves_this_month)) {
-    return { error: "limit_reached" };
-  }
-
-  // File size check
+  // File checks before we touch the counter.
   if (payload.fileBuffer) {
-    const limitMB = getPlanLimits(user.plan as Plan).maxFileUploadSizeMB;
-    if (payload.fileBuffer.length > limitMB * 1024 * 1024) {
+    if (payload.fileBuffer.length > limits.maxFileUploadSizeMB * 1024 * 1024) {
       return { error: "file_too_large" };
+    }
+    const projectedBytes = (user.storage_used_bytes ?? 0) + payload.fileBuffer.length;
+    if (projectedBytes > limits.maxStorageBytes) {
+      return { error: "storage_limit_reached" };
     }
   }
 
   if (payload.fileBuffer && !isAcceptedMimeType(payload.fileMimeType)) {
     return { error: "unsupported_file_type" };
+  }
+
+  // Atomic increment: only succeeds when the current count is below the cap.
+  // This eliminates the read-check-increment race condition.
+  const cap = limits.maxSavesPerMonth;
+  const incrementResult = await db.query(
+    `UPDATE users
+     SET saves_this_month = saves_this_month + 1
+     WHERE id = $1 AND saves_this_month < $2
+     RETURNING saves_this_month`,
+    [payload.userId, cap]
+  );
+
+  if (incrementResult.rowCount === 0) {
+    return { error: "limit_reached" };
   }
 
   const inferred = await inferCaptureActions({
@@ -100,26 +115,22 @@ export async function ingestItem(payload: IngestPayload) {
   );
 
   if (inferred.reminderAt) {
-    await db.query(
-      `INSERT INTO reminders (item_id, user_id, remind_at, channels)
-       VALUES ($1, $2, $3, '{email}')`,
-      [itemId, payload.userId, inferred.reminderAt],
+    // Check reminder cap before inserting.
+    const maxReminders = getMaxReminders(user.plan as Plan);
+    const reminderCount = await db.query<{ count: string }>(
+      "SELECT COUNT(*) AS count FROM reminders WHERE user_id = $1 AND sent = FALSE",
+      [payload.userId]
     );
-  }
+    const activeCount = parseInt(reminderCount.rows[0].count, 10);
 
-  // Increment usage
-  await db.query(
-    "UPDATE users SET saves_this_month = saves_this_month + 1 WHERE id = $1",
-    [payload.userId]
-  );
-
-  if (inferred.reminderAt) {
-    await db.query(
-      `UPDATE reminders
-       SET channels = $1
-       WHERE item_id = $2 AND user_id = $3 AND sent = FALSE`,
-      [payload.reminder_channels ?? ["email"], itemId, payload.userId],
-    );
+    if (activeCount < maxReminders) {
+      const channels = payload.reminder_channels ?? ["email"];
+      await db.query(
+        `INSERT INTO reminders (item_id, user_id, remind_at, channels)
+         VALUES ($1, $2, $3, $4)`,
+        [itemId, payload.userId, inferred.reminderAt, channels],
+      );
+    }
   }
 
   return {

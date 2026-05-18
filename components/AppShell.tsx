@@ -9,8 +9,8 @@ import {
   LayoutDashboard,
   Menu,
   MessageSquare,
+  Monitor,
   Moon,
-  Network,
   Plus,
   Search,
   Settings,
@@ -19,9 +19,17 @@ import {
   X,
 } from "lucide-react";
 import CreateItemDialog, { openCreateDialog } from "@/components/CreateItemDialog";
-import CaptureBar from "@/components/CaptureBar";
 import Tooltip from "@/components/Tooltip";
 import { useStoredState } from "@/lib/hooks";
+import {
+  DEFAULT_THEME,
+  THEME_STORAGE_KEY,
+  applyThemePreferenceToDocument,
+  getNextThemePreference,
+  getThemePreferenceLabel,
+  isThemePreference,
+  type ThemePreference,
+} from "@/lib/theme";
 
 type SessionUser = {
   id?: string;
@@ -40,20 +48,29 @@ export default function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useStoredState("recall-sidebar-collapsed", false);
-  const [mounted, setMounted] = useState(false);
-  const [theme, setTheme] = useStoredState<"dark" | "light">("recall-theme", "dark");
+  const [storedTheme, setTheme, themeHydrated] = useStoredState<ThemePreference | string>(THEME_STORAGE_KEY, DEFAULT_THEME);
+  const theme = isThemePreference(storedTheme) ? storedTheme : DEFAULT_THEME;
   const [query, setQuery] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const isImmersiveRoute = pathname === "/app/canvas" || pathname === "/app/graph";
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (!isThemePreference(storedTheme)) {
+      setTheme(DEFAULT_THEME);
+    }
+  }, [setTheme, storedTheme]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    if (!themeHydrated) {
+      return;
+    }
+
+    return applyThemePreferenceToDocument(theme);
+  }, [theme, themeHydrated]);
+
+  function cycleTheme() {
+    setTheme(getNextThemePreference(theme));
+  }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -95,7 +112,6 @@ export default function AppShell({
     () => [
       { href: "/app", label: "Feed", icon: LayoutDashboard },
       { href: "/app/canvas", label: "Canvas", icon: Workflow },
-      { href: "/app/graph", label: "Graph", icon: Network },
       { href: "/app/chat", label: "Chat", icon: MessageSquare },
       { href: "/app/settings/profile", label: "Settings", icon: Settings },
     ],
@@ -106,12 +122,13 @@ export default function AppShell({
     () => [
       { href: "/app", label: "Feed", icon: LayoutDashboard },
       { href: "/app/canvas", label: "Canvas", icon: Workflow },
-      { href: "/app/search", label: "Search", icon: Search },
       { href: "/app/chat", label: "Chat", icon: MessageSquare },
       { href: "/app/settings/profile", label: "Settings", icon: Settings },
     ],
     [],
   );
+
+  const themeLabel = getThemePreferenceLabel(theme);
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-text-primary md:pb-0">
@@ -152,16 +169,11 @@ export default function AppShell({
         <div className="mt-auto border-t border-border p-4">
           <button
             className="mb-3 flex w-full items-center justify-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-sm text-text-mid hover:bg-surface-2"
-            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            onClick={cycleTheme}
+            title={themeLabel}
           >
-            {mounted ? (
-              <>
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                {!collapsed ? <span>{theme === "dark" ? "Light theme" : "Dark theme"}</span> : null}
-              </>
-            ) : (
-              <div className="h-4 w-4" />
-            )}
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : theme === "light" ? <Monitor className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {!collapsed ? <span>{themeLabel}</span> : null}
           </button>
           <div className="flex items-center gap-3">
             {user.image ? (
@@ -210,14 +222,17 @@ export default function AppShell({
                   placeholder="Search across your archive"
                   className="w-full bg-transparent text-sm outline-none placeholder:text-text-muted"
                 />
-                <span className="hidden rounded-full border border-border bg-bg px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-text-muted md:inline-flex">
-                  Search
+                <span className="hidden items-center gap-1 md:inline-flex">
+                  <kbd className="rounded border border-border bg-bg px-1.5 py-0.5 font-mono text-[10px] text-text-muted">⌘K</kbd>
+                  <span className="text-[10px] text-text-muted/50">/</span>
+                  <kbd className="rounded border border-border bg-bg px-1.5 py-0.5 font-mono text-[10px] text-text-muted">/</kbd>
                 </span>
               </div>
             </form>
             <button
               className="inline-flex items-center gap-2 rounded-buttons bg-brand px-3 py-2 text-sm font-medium text-white md:px-4"
               onClick={() => openCreateDialog()}
+              title="Capture (⌘⇧C)"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Capture</span>
@@ -225,13 +240,6 @@ export default function AppShell({
           </div>
         </header>
         <main className="min-w-0 flex-1">
-          {!isImmersiveRoute ? (
-            <div className="border-b border-border/80 bg-gradient-to-b from-surface/70 to-transparent">
-              <div className="mx-auto max-w-7xl px-5 py-4">
-                <CaptureBar />
-              </div>
-            </div>
-          ) : null}
           <div className="min-w-0">{children}</div>
         </main>
       </div>
@@ -273,16 +281,11 @@ export default function AppShell({
           <div className="mt-auto border-t border-border p-4">
             <button
               className="mb-4 flex w-full items-center justify-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-sm text-text-mid hover:bg-surface-2"
-              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+              onClick={cycleTheme}
+              title={themeLabel}
             >
-            {mounted ? (
-              <>
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                <span>{theme === "dark" ? "Light theme" : "Dark theme"}</span>
-              </>
-            ) : (
-              <div className="h-4 w-4" />
-            )}
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : theme === "light" ? <Monitor className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <span>{themeLabel}</span>
             </button>
             <div className="flex items-center gap-3">
               {user.image ? (
@@ -303,7 +306,7 @@ export default function AppShell({
         <button type="button" className="absolute inset-0 -z-10" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation backdrop" />
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t border-border bg-surface/95 backdrop-blur md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-border bg-surface/95 backdrop-blur md:hidden">
         {mobileTabs.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/app" && pathname.startsWith(href));
           return (

@@ -1,26 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function useStoredState<T>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") {
-      return initial;
-    }
-
-    try {
-      const stored = window.localStorage.getItem(key);
-      return stored !== null ? (JSON.parse(stored) as T) : initial;
-    } catch {
-      return initial;
-    }
-  });
+  const initialRef = useRef(initial);
+  const [value, setValue] = useState<T>(initial);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
+      const stored = window.localStorage.getItem(key);
+      if (stored !== null) {
+        setValue(JSON.parse(stored) as T);
+      } else {
+        setValue(initialRef.current);
+      }
+    } catch {
+      setValue(initialRef.current);
+    } finally {
+      setHydrated(true);
+    }
+  }, [key]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    try {
       window.localStorage.setItem(key, JSON.stringify(value));
     } catch {}
-  }, [key, value]);
+  }, [hydrated, key, value]);
 
-  return [value, setValue] as const;
+  return [value, setValue, hydrated] as const;
 }

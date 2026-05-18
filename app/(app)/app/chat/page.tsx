@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Bot, Loader2, MessageSquare, Plus, SendHorizontal, Sparkles } from "lucide-react";
+import { Bot, Download, Loader2, MessageSquare, Plus, SendHorizontal, Trash2 } from "lucide-react";
 import ItemDetailModal from "@/components/ItemDetailModal";
 
 interface Message {
@@ -218,42 +218,26 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-8">
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">
-            <Sparkles className="h-3 w-3" />
-            Source-backed answers
-          </div>
-          <h1 className="text-2xl font-semibold text-text-primary">Chat with your archive</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Ask natural questions, keep separate threads, and inspect the sources that informed each answer.
-          </p>
-        </div>
-        <button
-          onClick={startNewThread}
-          className="inline-flex items-center gap-2 self-start rounded-buttons border border-border bg-surface px-4 py-2 text-sm text-text-primary transition hover:border-brand/40 hover:bg-surface-2"
-        >
-          <Plus className="h-4 w-4" />
-          New thread
-        </button>
-      </div>
-
-      {error ? (
-        <div className="mb-4 rounded-cards border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-modals border border-border bg-surface">
-          <div className="flex items-center justify-between border-b border-border px-4 py-4">
-            <div>
-              <h2 className="text-base font-semibold text-text-primary">Threads</h2>
-              <p className="text-xs text-text-muted">Recent conversations stay local to this browser.</p>
+    <div className="h-[calc(100dvh-4.25rem)] min-h-[34rem] p-3 md:p-5">
+      <div className="grid h-full gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col overflow-hidden rounded-modals border border-border bg-surface">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold text-text-primary">Chat threads</h1>
+              <p className="truncate text-xs text-text-muted">Stored locally in this browser</p>
             </div>
+            <button
+              type="button"
+              onClick={startNewThread}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-buttons bg-brand text-white transition hover:bg-brand-hover"
+              title="New thread"
+              aria-label="New thread"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
-          <div className="max-h-[calc(100vh-20rem)] space-y-2 overflow-y-auto p-3">
+
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
             {threads.map((thread) => (
               <button
                 key={thread.id}
@@ -267,7 +251,7 @@ export default function ChatPage() {
                     : "border-border bg-bg hover:border-brand/30 hover:bg-surface-2"
                 }`}
               >
-                <div className="line-clamp-1 text-sm font-medium text-text-primary">{thread.title}</div>
+                <div className="line-clamp-1 text-sm font-semibold text-text-primary">{thread.title}</div>
                 <div className="mt-1 line-clamp-2 text-xs text-text-muted">
                   {thread.messages[thread.messages.length - 1]?.content || "No messages yet"}
                 </div>
@@ -278,54 +262,62 @@ export default function ChatPage() {
                       event.stopPropagation();
                       deleteThread(thread.id);
                     }}
-                    className="text-[11px] text-rose-300 hover:text-rose-200"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-buttons text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                    title="Delete thread"
                   >
-                    Delete
+                    <Trash2 className="h-3.5 w-3.5" />
                   </span>
                 </div>
               </button>
             ))}
             {threads.length === 0 ? (
-              <div className="rounded-cards border border-dashed border-border bg-bg px-3 py-6 text-sm text-text-muted">
-                No chat history yet.
+              <div className="rounded-cards border border-dashed border-border bg-bg px-4 py-8 text-sm text-text-muted">
+                Start a conversation and it will appear here.
               </div>
             ) : null}
           </div>
         </aside>
 
-        <section className="flex min-h-[65vh] flex-col overflow-hidden rounded-modals border border-border bg-surface">
-          <div className="border-b border-border px-5 py-4">
-            <div className="flex items-center gap-3">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-modals border border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/10 text-brand">
                 <Bot className="h-4 w-4" />
               </div>
-              <div>
-                <h2 className="text-base font-semibold text-text-primary">
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-semibold text-text-primary">
                   {threadId ? threads.find((thread) => thread.id === threadId)?.title || "Current thread" : "New conversation"}
                 </h2>
-                <p className="text-xs text-text-muted">Answers summarize your saved content and attach citations when available.</p>
+                <p className="truncate text-xs text-text-muted">Ask natural questions and inspect source citations.</p>
               </div>
             </div>
             {threadId ? (
               <button
                 type="button"
                 onClick={exportCurrentThread}
-                className="mt-3 rounded-buttons border border-border bg-bg px-3 py-2 text-xs text-text-primary hover:border-brand/40"
+                className="inline-flex items-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-xs text-text-primary hover:border-brand/40"
               >
+                <Download className="h-3.5 w-3.5" />
                 Export thread
               </button>
             ) : null}
           </div>
 
-          <div className="flex-1 space-y-4 overflow-y-auto bg-bg/50 p-4">
+          {error ? (
+            <div className="border-b border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-bg/40 p-4">
             {messages.length === 0 ? (
               <div className="flex h-full min-h-[24rem] flex-col items-center justify-center rounded-cards border border-dashed border-border bg-bg px-6 text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
-                  <MessageSquare className="h-6 w-6" />
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-brand">
+                  <MessageSquare className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-semibold text-text-primary">Start with a question you would ask yourself later</h3>
+                <h3 className="text-base font-semibold text-text-primary">Start with a question</h3>
                 <p className="mt-2 max-w-xl text-sm text-text-muted">
-                  Good prompts mention timeframes, projects, or themes. The chat works best when it can pull from several enriched items.
+                  Use timeframes, project names, or themes so Recall can pull from several enriched items.
                 </p>
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   {suggestedPrompts.map((prompt) => (

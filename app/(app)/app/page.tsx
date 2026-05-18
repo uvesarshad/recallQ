@@ -2,8 +2,8 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import FeedPageClient from "@/components/FeedPageClient";
+import OnboardingBanner from "@/components/OnboardingBanner";
 import type { ArchiveItem, CollectionRecord } from "@/lib/types";
-import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +72,7 @@ export default async function AppFeedPage({
   }
 
   if (!session?.user?.id) {
-    redirect("/app/login");
+    redirect("/login");
   }
   const { items, hasMore, nextCursor } = await getItems(session.user.id);
   const folders = await getFolders(session.user.id);
@@ -100,15 +100,7 @@ export default async function AppFeedPage({
       {items.length === 0 ? (
         <>
           <FeedPageClient initialItems={[]} folders={folders} initialHasMore={false} initialNextCursor={null} />
-          <div className="mx-auto mt-2 max-w-7xl px-5 pb-8">
-            <div className="flex flex-col items-center justify-center rounded-modals border border-border bg-surface p-12 text-center">
-              <div className="mb-4 rounded-full bg-surface-2 p-3 text-text-muted">
-                <Plus className="h-6 w-6" />
-              </div>
-              <h3 className="text-lg font-semibold text-text-primary">Your library is empty</h3>
-              <p className="text-sm text-text-mid">Save links, notes or files to get started.</p>
-            </div>
-          </div>
+          <OnboardingBanner />
         </>
       ) : (
         <FeedPageClient

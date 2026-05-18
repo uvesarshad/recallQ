@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL("/app/login?next=/app", req.url), 303);
+    return NextResponse.redirect(new URL("/login?next=/app", req.url), 303);
   }
 
   const formData = await req.formData();

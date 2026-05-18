@@ -18,7 +18,7 @@ import {
 } from "@xyflow/react";
 import type { LinkObject, NodeObject } from "react-force-graph-2d";
 import "@xyflow/react/dist/style.css";
-import { Filter, Pin, PinOff, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, GitBranch, Pin, PinOff, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import ItemDetailModal from "@/components/ItemDetailModal";
 import { ARCHIVE_ITEM_CREATED_EVENT, ARCHIVE_ITEMS_CHANGED_EVENT } from "@/lib/archive-events";
 
@@ -219,7 +219,11 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
   const [query, setQuery] = useState("");
   const [minStrength, setMinStrength] = useState(0.75);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [showConnectedOnly, setShowConnectedOnly] = useState(false);
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [activeTypes, setActiveTypes] = useState<GraphNode["type"][]>(allTypes);
+
+  const MAX_VISIBLE_NODES = 150;
 
   const loadGraph = useCallback(async () => {
     setLoading(true);
@@ -311,16 +315,27 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
     };
   }, [loadGraph]);
 
-  const visibleNodes = useMemo(
-    () =>
-      graphData.nodes.filter(
-        (node) =>
-          activeTypes.includes(node.type) &&
-          (!showPinnedOnly || node.canvas_pinned) &&
-          matchesNodeQuery(node, query),
-      ),
-    [activeTypes, graphData.nodes, query, showPinnedOnly],
-  );
+  const connectedNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const edge of graphData.edges) {
+      if (edge.strength >= minStrength) {
+        ids.add(edge.item_a_id);
+        ids.add(edge.item_b_id);
+      }
+    }
+    return ids;
+  }, [graphData.edges, minStrength]);
+
+  const visibleNodes = useMemo(() => {
+    const filtered = graphData.nodes.filter(
+      (node) =>
+        activeTypes.includes(node.type) &&
+        (!showPinnedOnly || node.canvas_pinned) &&
+        (!showConnectedOnly || connectedNodeIds.has(node.id)) &&
+        matchesNodeQuery(node, query),
+    );
+    return filtered.length > MAX_VISIBLE_NODES ? filtered.slice(0, MAX_VISIBLE_NODES) : filtered;
+  }, [activeTypes, connectedNodeIds, graphData.nodes, query, showConnectedOnly, showPinnedOnly]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
 
@@ -392,14 +407,18 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
     setQuery("");
     setMinStrength(0.75);
     setShowPinnedOnly(false);
+    setShowConnectedOnly(false);
     setActiveTypes(allTypes);
   }
 
   const pinnedCount = visibleNodes.filter((node) => node.canvas_pinned).length;
-  const averageStrength =
-    visibleEdges.length > 0
-      ? (visibleEdges.reduce((total, edge) => total + edge.strength, 0) / visibleEdges.length).toFixed(2)
-      : "0.00";
+  const isCapped = graphData.nodes.filter(
+    (node) =>
+      activeTypes.includes(node.type) &&
+      (!showPinnedOnly || node.canvas_pinned) &&
+      (!showConnectedOnly || connectedNodeIds.has(node.id)) &&
+      matchesNodeQuery(node, query),
+  ).length > MAX_VISIBLE_NODES;
 
   return (
     <div className="relative h-[calc(100vh-1rem)] overflow-hidden bg-bg">
@@ -431,9 +450,19 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
           >
             <RefreshCw className={`h-4 w-4 transition-transform duration-500 group-active:rotate-180 ${loading ? "animate-spin" : ""}`} />
           </button>
+          <button
+            type="button"
+            className="group rounded-xl p-2 text-text-muted transition-all hover:bg-surface-2 hover:text-brand"
+            onClick={() => setControlsCollapsed((current) => !current)}
+            title={controlsCollapsed ? "Show options" : "Hide options"}
+            aria-expanded={!controlsCollapsed}
+          >
+            {controlsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
         </div>
 
         {/* Filters & Search */}
+        {!controlsCollapsed ? (
         <div className="flex flex-col gap-5 rounded-2xl border border-border/50 bg-surface/80 p-5 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center justify-between">
             <div>
@@ -483,7 +512,25 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
             </div>
           </div>
 
+          {isCapped && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-400">
+              Showing first {MAX_VISIBLE_NODES} nodes. Enable <strong>Connected Only</strong> or narrow filters to see less.
+            </div>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setShowConnectedOnly((current) => !current)}
+              className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-all ${
+                showConnectedOnly
+                  ? "border-brand bg-brand/10 text-brand shadow-inner"
+                  : "border-border/40 bg-bg/40 text-text-muted hover:border-brand/20 hover:text-text-primary"
+              }`}
+            >
+              <GitBranch className="h-4 w-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Connected Only</span>
+            </button>
             <button
               type="button"
               onClick={() => setShowPinnedOnly((current) => !current)}
@@ -531,8 +578,23 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
             </div>
           </div>
         </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setControlsCollapsed(false)}
+            className="flex items-center justify-between rounded-2xl border border-border/50 bg-surface/80 px-4 py-3 text-left shadow-2xl backdrop-blur-xl transition-colors hover:border-brand/40 hover:bg-surface"
+            aria-label="Show map options"
+          >
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-text-primary">
+              <SlidersHorizontal className="h-4 w-4 text-brand" />
+              Options
+            </span>
+            <span className="text-[11px] text-text-muted">{visibleNodes.length} nodes</span>
+          </button>
+        )}
 
         {/* Legend (Collapsible or subtle) */}
+        {!controlsCollapsed ? (
         <div className="rounded-2xl border border-border/50 bg-surface/80 p-4 shadow-xl backdrop-blur-xl">
            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
              <span>Relationship Legend</span>
@@ -555,8 +617,12 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
              Drag cards in <span className="text-brand font-semibold">Canvas</span> to organize. Use <span className="text-brand font-semibold">Graph</span> for cluster analysis.
            </p>
         </div>
+        ) : null}
       </div>
 
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {loading ? "Loading knowledge map" : error ? error : ""}
+      </div>
       {loading ? (
         <div className="absolute right-4 top-4 z-20 rounded-buttons border border-border bg-surface px-3 py-2 text-xs text-text-muted">
           Syncing knowledge map...
@@ -710,15 +776,6 @@ export default function KnowledgeMap({ initialMode }: { initialMode: ViewMode })
       )}
 
       <ItemDetailModal itemId={selectedId || ""} open={!!selectedId} onClose={() => setSelectedId(null)} />
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-cards border border-border bg-bg px-3 py-3">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-text-primary">{value}</div>
     </div>
   );
 }

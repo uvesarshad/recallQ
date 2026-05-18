@@ -1,47 +1,49 @@
-# Folder Structure
+# Folder Structure and Naming Conventions
 
-> **Scope:** This document explains the purpose of each major directory in the Recally project root. **Rendering context:** N/A **Last updated:** auto
+> Scope: Directory organization, structural grouping, co-location practices, and code style boundaries.
+> Rendering context: Isomorphic
+> Project tier: 4
+> Last updated: 2026-05-17
 
 ## Overview
+Recall utilizes a modular, feature-grouped directory hierarchy built inside a Next.js App Router structure. Code is organized by layers (UI presentation, business logic, background processing, and database schemas) with clear separations between client-side layouts and server-side worker daemons.
 
-The project follows a structure that separates concerns based on Next.js App Router conventions, feature domains, and application layers (UI, logic, data).
+## Workspace Directory Map
 
-## Top-Level Directories
+- app: Contains all routing layouts, endpoints, and views. Built exclusively with Next.js App Router.
+  - app/api: Server-side REST API handlers grouped by feature (e.g. app/api/items, app/api/chat).
+  - app/(app): Route group containing the primary authenticated application shell.
+    - app/(app)/app: Nested folder structure serving the core dashboard routes (e.g. app/(app)/app/canvas, app/(app)/app/chat).
+  - app/(auth): Public auth pages for /login, /signup, /forgot-password, and /reset-password.
+  - app/app: Compatibility auth redirect at app/app/login/page.tsx.
+- components: Presentational and interactive React UI components (e.g. CaptureBar.tsx, ItemCard.tsx). All global UI components live in the root of this folder with no sub-folders.
+- lib: Core business logic, helper scripts, and client initializations (e.g. lib/db.ts, lib/auth.ts, lib/gemini.ts). Isomorphic utilities are placed here alongside specialized backend logic.
+- migrations: Relational SQL migrations numbered sequentially from 001_initial.sql to 005_add_billing.sql.
+- workers: TypeScript-based background worker daemons (enrichment-worker.ts and reminder-worker.ts) that process items and dispatch reminders asynchronously.
+- tests: Custom test suites and runner harness files.
+- scripts: Developer scripting utilities, database run scripts, and webhook registration tools.
+- public: Static public assets, image mockups, and PWA configurations (e.g. manifest.json, apple touch icons).
 
-- **`/app`**: The core of the Next.js application, using the App Router.
-  - **`/app/(app)`**: Contains the main authenticated application routes and layouts. This route group is used to apply the main app shell layout (`app/(app)/layout.tsx`) to all pages within it.
-  - **`/app/(auth)`**: Contains routes related to authentication, like the login page. This route group has its own layout, separate from the main app shell.
-  - **`/app/api`**: Holds all API route handlers. These are used for webhooks, and specific client-side interactions that don't use Server Actions.
-  - **`/app/globals.css`**: Defines global CSS styles.
-  - **`/app/layout.tsx`**: The root layout for the entire application. A Next.js special file.
+## Naming Conventions
+- React Components: Always PascalCase (e.g. CaptureBar.tsx, AppShell.tsx) located in the components directory.
+- Routes and Directories: Always kebab-case or brackets for dynamic parameters (e.g. app/api/payments/create-subscription, app/api/items/[id]).
+- Core Helper Libraries: Always kebab-case or camelCase (e.g. lib/plan-limits.ts, lib/request-auth.ts).
+- Database Migration Files: Prefixed with three-digit sequential padding (e.g. 001_initial.sql).
+- Background Workers: Kebab-case (e.g. workers/enrichment-worker.ts).
 
-- **`/components`**: Contains shared, reusable React components used throughout the application. These are often Client Components (`"use client"`) if they involve user interaction or state.
+## Architectural Boundaries
+- AGENT AVOID: Never mix UI components inside the lib directory. Keep lib/ strictly reserved for data models, API integrations, and helper logic.
+- AGENT NOTE: All shared UI pieces belong under components/ rather than co-locating them inside App Router sub-directories to maintain high reusability.
 
-- **`/lib`**: A critical directory containing shared, reusable, server-side business logic.
-  - **AGENT NOTE:** Code in this directory should be considered isomorphic or server-only unless explicitly designed for client-side use. It is the central hub for database interactions, external API clients, and core application logic.
-
-- **`/migrations`**: Contains SQL migration files for the PostgreSQL database. These define the database schema changes over time.
-
-- **`/node_modules`**: Standard directory for all npm package dependencies. AGENT AVOID: Do not edit files in this directory.
-
-- **`/public`**: Contains static assets that are served publicly, such as icons, images, and the web app manifest (`manifest.json`).
-
-- **`/scripts`**: Holds standalone Node.js scripts for various maintenance and operational tasks, such as database migrations (`migrate.js`) and webhook registration (`register-telegram-webhook.js`).
-
-- **`/workers`**: Contains long-running or heavy-duty processing scripts that run as background jobs. These are separate from the main Next.js application process. Example: `enrichment-worker.ts`.
-
-- **`/docs`**: (This directory) Contains all AI-readable project documentation.
-
-## Configuration Files
-
-- **`.env.example`**: An example file showing the required environment variables.
-- **`.gitignore`**: Specifies files and directories to be ignored by Git.
-- **`next.config.mjs`**: The main configuration file for the Next.js application.
-- **`package.json`**: Defines project metadata, dependencies, and scripts.
-- **`postcss.config.mjs`**: Configuration for PostCSS, used by Tailwind CSS.
-- **`tsconfig.json`**: The configuration file for the TypeScript compiler.
+## Update Triggers
+- When a new top-level directory is created in the repository.
+- When renaming existing core directories.
+- When shifting file placement rules (e.g. moving a helper from lib/ to components/).
 
 ## Related Docs
+- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) — Connects workspace layers.
+- [docs/architecture/rendering-strategy.md](file:///e:/Projects/recallQ/docs/architecture/rendering-strategy.md) — Explains routing layers.
+- [docs/ui/component-library.md](file:///e:/Projects/recallQ/docs/ui/component-library.md) — Catalogs component files.
 
-- [docs/overview.md] — Provides a high-level summary of the project architecture.
-- [docs/ui/layout-system.md] — Details the specifics of the layouts defined in `/app`.
+AGENT OWNER: app/
+AGENT UPDATE: docs/architecture/folder-structure.md

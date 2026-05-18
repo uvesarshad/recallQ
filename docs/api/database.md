@@ -1,92 +1,54 @@
-# Database Schema
+# Database Schema and Migrations
 
-> **Scope:** This document describes the PostgreSQL database schema, including tables, key columns, and their relationships. **Rendering context:** N/A **Last updated:** auto
+> Scope: Documents relational database schemas, tables, relationships, indexes, pgvector integration, and migration files.
+> Rendering context: Server-side
+> Project tier: 4
+> Last updated: 2026-05-17
 
 ## Overview
+Recall utilizes a local, system-installed PostgreSQL database as its primary persistent storage. Database connections are handled through an active pg Pool in lib/db.ts, performing raw SQL query statements. The shared query helper retries once with a fresh pool when a stale development connection reports a closed or terminated connection. The database features 768-dimensional vector embeddings managed via the pgvector extension for high-performance cosine similarity searches.
 
-The project uses a PostgreSQL database. The schema is managed through SQL migration files located in the `/migrations` directory. The database serves as the single source of truth for all user data, content, and application state. The `pg` library is used for database access, with queries consolidated in the `/lib` directory.
+## Database Tables Map
 
-## ORM and Migrations
+- users: Core user profiles. Includes unique UUID primary key, name, email (unique), password_hash for email/password accounts, emailVerified timestamp, avatar image URL, telegram_chat_id (unique), telegram_link_token (unique), inbound_email_address (unique), active plan tier (free, starter, pro), saves_this_month integer, push_subscription JSONB, timezone (defaults to Asia/Kolkata), bio, consents, and Razorpay billing identifiers.
+- accounts: NextAuth social login mapping. Links user UUIDs to Google OAuth provider accounts.
+- sessions: NextAuth browser session mapping. Links user UUIDs to active tokens and expiration dates.
+- verification_token: Legacy NextAuth email verification token table. Has primary composite keys and is retained for compatibility with earlier installs.
+- password_reset_tokens: One-time email password reset records. Stores a reset UUID, user UUID, SHA-256 token hash, expiration timestamp, optional used_at timestamp, and created_at timestamp.
+- collections: Archive folders. Stores collection UUID, owner user UUID, folder name, color, and icon names.
+- items: The central content table. Stores item UUID, owner user UUID, collection UUID (nullable), type (url, text, file, note), raw URLs, raw extracted body text, local file paths, file metadata, AI-enriched titles, summaries, tags (text array), image URLs, capture sources, capture notes, reminder times, enrichment statuses, and canvas coordinates.
+- item_relations: Similarity graph edges. Stores relation UUID, owner user UUID, item_a_id, item_b_id, relation_type (ai_similar, ai_same_domain, ai_topic, user_linked), connection strength (0.0 to 1.0), and timestamps. Has unique key composite constraints.
+- item_comments: Threaded notes. Stores comment UUID, item UUID, user UUID, body text, and timestamps.
+- reminders: Reminders queue. Stores reminder UUID, item UUID, user UUID, remind_at timestamp, dispatch channels (text array: email, telegram, push), and sent flags.
 
-- **ORM:** The project does not use a traditional ORM. It uses the `pg` library to execute raw SQL queries.
-  - **AGENT OWNER:** `lib/db.ts` is responsible for creating and exporting the database connection pool.
-- **Migrations:** Schema changes are managed with plain SQL files in `/migrations`. A custom script (`scripts/migrate.js`) applies these migrations.
-  - **AGENT NOTE:** To make a schema change, create a new numbered SQL file in `/migrations` and then run the migration script.
+## Database Indexes
+- GIN Index: idx_items_tags is a generalized inverted index placed on the items tags array column to accelerate tag searches.
+- Vector Index: idx_items_embedding is an ivfflat index built on the items embedding column using vector_cosine_ops with lists set to 100 to speed up semantic cosine distance searches.
+- Partial Indexes: idx_items_reminder (filters items where reminder_sent is false) and idx_reminders_due (filters reminders where sent is false) limit index sizes to active pending reminders only.
+- Relationships Indexes: Placed on item_relations item_a_id, item_b_id, and item_comments item_id to speed up graph fetches and comment loads.
 
----
+## Migration Files List
+Migrations are located inside the migrations directory and are executed sequentially by Node.js scripts:
+- 001_initial.sql: Establishes base NextAuth tables, collections, items, item_relations, reminders, and core indexes.
+- 002_add_item_image.sql: Adds the image_url column to the items table to store scraped web images.
+- 003_enable_embeddings.sql: Attempts to activate the pgvector extension and appends the 768-dimensional embedding vector column to the items table.
+- 004_profile_and_comments.sql: Appends bio, timezone, and consent fields to the users table, and creates the item_comments table.
+- 005_add_billing.sql: Appends Razorpay customer, plan, and subscription details to the users table.
+- 006_chat_quota.sql: Appends daily chat quota tracking to users.
+- 007_search_index.sql: Adds search-oriented item indexes and text search helpers.
+- 008_push_and_storage_quota.sql: Appends storage quota and file usage columns to users.
+- 009_password_auth.sql: Adds users.password_hash for local email/password authentication.
+- 010_password_reset_tokens.sql: Creates password_reset_tokens and indexes for local email/password reset links.
 
-## Core Tables
-
-### `users`
-- **Purpose:** Stores user profile and authentication information. This table is central to the application's multi-tenant design.
-- **Key Columns:**
-  - `id`: Primary key (UUID).
-  - `email`: Unique email for login.
-  - `plan`: The user's subscription plan (e.g., 'free', 'pro'). Governs access to features and limits.
-  - `saves_this_month`: A counter used to enforce plan limits.
-  - `inbound_email_address`: A unique, secret email address for the email ingestion feature.
-  - `razorpay_customer_id`, `razorpay_subscription_id`: Columns for managing billing and subscriptions via Razorpay.
-
-### `items`
-- **Purpose:** The most important table in the application. Stores every piece of content (note, URL, file) as an "Item".
-- **Relationships:** Belongs to a `user` and can optionally belong to a `collection`.
-- **Key Columns:**
-  - `id`: Primary key (UUID).
-  - `user_id`: Foreign key to `users.id`. All items are owned by a user.
-  - `type`: The type of item ('url', 'text', 'file', 'note').
-  - `raw_url`, `raw_text`, `file_path`: Stores the original, unprocessed content.
-  - `enriched`: A boolean flag (`false` by default) that signals the item is ready for processing by the enrichment worker.
-  - `title`, `summary`, `tags`: Populated by the AI enrichment worker.
-  - `embedding`: A `vector(768)` column storing the embedding for similarity searches. Added conditionally if the `pgvector` extension is available.
-    - **AGENT SEE:** `docs/modules/enrichment.md#vector-embeddings`
-
-### `item_relations`
-- **Purpose:** Acts as a join table to create a graph structure between items. These are the "edges" of the knowledge graph.
-- **Relationships:** Links two `items` (`item_a_id` and `item_b_id`) and belongs to a `user`.
-- **Key Columns:**
-  - `item_a_id`, `item_b_id`: Foreign keys to `items.id`.
-  - `relation_type`: The reason for the relationship (e.g., `ai_similar`, `user_linked`).
-  - `strength`: A float value used for weighting edges in the graph visualization.
-
-### `collections`
-- **Purpose:** Allows users to group items into named collections.
-- **Relationships:** Belongs to a `user`. Has many `items`.
-- **Key Columns:**
-  - `id`: Primary key (UUID).
-  - `user_id`: Foreign key to `users.id`.
-  - `name`: The user-defined name of the collection.
-
----
-
-## Feature-Specific Tables
-
-### `reminders`
-- **Purpose:** Stores information about reminders set on items.
-- **Relationships:** Belongs to an `item` and a `user`.
-- **Process:** A separate worker (`workers/reminder-worker.ts`) polls this table for due reminders.
-- **Key Columns:**
-  - `remind_at`: The timestamp when the reminder is due.
-  - `sent`: A boolean flag to indicate if the reminder has been sent.
-  - `channels`: An array of channels to send the reminder to (e.g., `email`, `telegram`).
-
-### `item_comments`
-- **Purpose:** Stores comments made by users on an item.
-- **Relationships:** Belongs to an `item` and a `user`.
-- **Key Columns:**
-  - `id`: Primary key (UUID).
-  - `item_id`: The item the comment is on.
-  - `user_id`: The user who wrote the comment.
-  - `body`: The text content of the comment.
-
----
-
-## NextAuth.js Tables
-These tables are standard for the `next-auth` library with a database adapter and are used to manage sessions and OAuth accounts.
-
-- **`accounts`**: Stores provider information for users who sign in with OAuth (e.g., Google).
-- **`sessions`**: Stores user session information.
-- **`verification_token`**: Used for passwordless email sign-in.
+## Update Triggers
+- When a database migration file (.sql) is added, removed, or modified.
+- When an index is added or altered.
+- When a model interface or table column definition changes in lib/types.ts.
 
 ## Related Docs
-- [docs/architecture/data-flow.md] — Explains how data flows into and out of these tables.
-- [docs/migrations/*.sql] — The source of truth for the exact schema definitions.
+- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) — Tech stack context.
+- [docs/api/route-handlers.md](file:///e:/Projects/recallQ/docs/api/route-handlers.md) — API queries.
+- [docs/api/external-services.md](file:///e:/Projects/recallQ/docs/api/external-services.md) — Integrations context.
+
+AGENT OWNER: lib/db.ts
+AGENT UPDATE: docs/api/database.md

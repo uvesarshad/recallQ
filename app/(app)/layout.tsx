@@ -19,7 +19,7 @@ export default async function AppLayout({
   }
 
   if (!session) {
-    redirect("/app/login");
+    redirect("/login");
   }
   const user = {
     id: session.user?.id,

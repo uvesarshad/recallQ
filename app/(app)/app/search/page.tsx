@@ -42,13 +42,15 @@ export default function SearchPage() {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&mode=hybrid`);
         if (!res.ok) {
-          throw new Error("Search request failed");
+          setExactMatches([]);
+          setSemanticMatches([]);
+          setError("Search is unavailable right now.");
+          return;
         }
         const data = (await res.json()) as { exact?: ArchiveItem[]; semantic?: ArchiveItem[] };
         setExactMatches(data.exact || []);
         setSemanticMatches(data.semantic || []);
-      } catch (err) {
-        console.error("Search failed:", err);
+      } catch {
         setError("Search is unavailable right now.");
       } finally {
         setLoading(false);

@@ -4,6 +4,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   AUTH_SECRET: z.string().min(1, "AUTH_SECRET is required"),
+  AUTH_URL: z.string().url().optional(),
+  NEXTAUTH_URL: z.string().url().optional(),
   APP_URL: z.string().url().optional(),
   APP_DOMAIN: z.string().min(1).optional(),
   SELF_HOSTED: z.enum(["true", "false"]).optional(),
@@ -27,6 +29,10 @@ const envSchema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
   RAZORPAY_PLAN_STARTER_YEARLY_ID: z.string().min(1).optional(),
   RAZORPAY_PLAN_PRO_YEARLY_ID: z.string().min(1).optional(),
+  VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+  VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+  VAPID_SUBJECT: z.string().min(1).optional(),
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   DEV_BYPASS_LOGIN: z.enum(["true", "false"]).optional(),
 });
 

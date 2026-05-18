@@ -44,6 +44,79 @@ function makeSnippet(
   return `${start > 0 ? "..." : ""}${haystack.slice(start, end)}${end < haystack.length ? "..." : ""}`;
 }
 
+async function runExactSearch(userId: string, query: string) {
+  try {
+    const result = await db.query<SearchItem>(
+      `SELECT id, type, title, summary, tags, source, created_at, raw_url, raw_text,
+              ts_rank(tsv, websearch_to_tsquery('english', $1)) AS rank
+       FROM items
+       WHERE user_id = $2
+         AND tsv @@ websearch_to_tsquery('english', $1)
+       ORDER BY rank DESC, created_at DESC
+       LIMIT 20`,
+      [query, userId],
+    );
+
+    return result.rows.map((item) => ({ ...item, snippet: makeSnippet(query, item) }));
+  } catch (error) {
+    console.warn("Falling back to basic search:", error);
+    const likeQuery = `%${query}%`;
+    const result = await db.query<SearchItem>(
+      `SELECT id, type, title, summary, tags, source, created_at, raw_url, raw_text
+       FROM items
+       WHERE user_id = $1
+         AND (
+           title ILIKE $2
+           OR summary ILIKE $2
+           OR raw_text ILIKE $2
+           OR raw_url ILIKE $2
+           OR EXISTS (
+             SELECT 1 FROM unnest(tags) AS tag
+             WHERE tag ILIKE $2
+           )
+         )
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [userId, likeQuery],
+    );
+
+    return result.rows.map((item) => ({ ...item, snippet: makeSnippet(query, item) }));
+  }
+}
+
+async function runSemanticSearch(userId: string, query: string) {
+  const vectorEnabled = await hasVectorSupport();
+  if (!vectorEnabled) {
+    return [];
+  }
+
+  try {
+    const embedding = await embedText(query);
+    if (!embedding) {
+      return [];
+    }
+
+    const semanticResult = await db.query<SearchItem>(
+      `SELECT id, type, title, summary, tags, source, created_at, raw_url, raw_text,
+              1 - (embedding <=> $1::vector) as similarity
+       FROM items
+       WHERE user_id = $2 AND embedding IS NOT NULL
+       AND 1 - (embedding <=> $1::vector) > 0.7
+       ORDER BY embedding <=> $1::vector
+       LIMIT 20`,
+      [JSON.stringify(embedding), userId],
+    );
+
+    return semanticResult.rows.map((item) => ({
+      ...item,
+      snippet: makeSnippet(query, item),
+    }));
+  } catch (error) {
+    console.warn("Semantic search unavailable:", error);
+    return [];
+  }
+}
+
 export async function GET(req: Request) {
   const user = await requireSessionUser();
   if (!user) {
@@ -58,99 +131,23 @@ export async function GET(req: Request) {
     return apiOk({ items: [], exact: [], semantic: [] });
   }
 
-  if (mode === "fulltext") {
-    const result = await db.query<SearchItem>(
-      `SELECT id, type, title, summary, tags, source, created_at, raw_url, raw_text,
-              ts_rank(
-                setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-                setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
-                setweight(to_tsvector('english', coalesce(raw_text, '')), 'C'),
-                websearch_to_tsquery('english', $2)
-              ) as rank
-       FROM items 
-       WHERE user_id = $1 AND (
-         to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || coalesce(raw_text, '')) @@ websearch_to_tsquery('english', $2)
-       )
-       ORDER BY rank DESC, created_at DESC
-       LIMIT 20`,
-      [user.id, query]
-    );
+  if (query.length > 500) {
+    return apiError("Query too long (max 500 characters)", 400);
+  }
 
-    const exact = result.rows.map((item) => ({ ...item, snippet: makeSnippet(query, item) }));
+  if (mode === "fulltext") {
+    const exact = await runExactSearch(user.id, query);
     return apiOk({ items: exact, exact, semantic: [] });
   }
 
   if (mode === "semantic" || mode === "hybrid") {
-    const vectorEnabled = await hasVectorSupport();
-    if (!vectorEnabled) {
-      if (mode === "semantic") {
-        return apiOk({ items: [], exact: [], semantic: [] });
-      }
-
-      const fulltextResult = await db.query<SearchItem>(
-        `SELECT id, type, title, summary, tags, source, created_at, raw_url, raw_text,
-                ts_rank(
-                  setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-                  setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
-                  setweight(to_tsvector('english', coalesce(raw_text, '')), 'C'),
-                  websearch_to_tsquery('english', $1)
-                ) as rank
-         FROM items 
-         WHERE user_id = $2 AND (
-           to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || coalesce(raw_text, '')) @@ websearch_to_tsquery('english', $1)
-         )
-         ORDER BY rank DESC, created_at DESC
-         LIMIT 20`,
-        [query, user.id]
-      );
-
-      const exact = fulltextResult.rows.map((item) => ({ ...item, snippet: makeSnippet(query, item) }));
-      return apiOk({ items: exact, exact, semantic: [] });
-    }
-
-    const embedding = await embedText(query);
-    if (!embedding) {
-      return apiOk({ items: [], exact: [], semantic: [] });
-    }
-
-    const semanticResult = await db.query<SearchItem>(
-      `SELECT id, type, title, summary, tags, source, created_at, raw_url, raw_text,
-              1 - (embedding <=> $1::vector) as similarity
-       FROM items 
-       WHERE user_id = $2 AND embedding IS NOT NULL
-       AND 1 - (embedding <=> $1::vector) > 0.7
-       ORDER BY embedding <=> $1::vector
-       LIMIT 20`,
-      [JSON.stringify(embedding), user.id]
-    );
-
-    const semantic = semanticResult.rows.map((item) => ({
-      ...item,
-      snippet: makeSnippet(query, item),
-    }));
+    const semantic = await runSemanticSearch(user.id, query);
 
     if (mode === "semantic") {
       return apiOk({ items: semantic, exact: [], semantic });
     }
 
-    const fulltextResult = await db.query<SearchItem>(
-      `SELECT id, type, title, summary, tags, source, created_at, raw_url, raw_text,
-              ts_rank(
-                setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-                setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
-                setweight(to_tsvector('english', coalesce(raw_text, '')), 'C'),
-                websearch_to_tsquery('english', $1)
-              ) as rank
-       FROM items 
-       WHERE user_id = $2 AND (
-         to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || coalesce(raw_text, '')) @@ websearch_to_tsquery('english', $1)
-       )
-       ORDER BY rank DESC, created_at DESC
-       LIMIT 20`,
-      [query, user.id]
-    );
-
-    const exact = fulltextResult.rows.map((item) => ({ ...item, snippet: makeSnippet(query, item) }));
+    const exact = await runExactSearch(user.id, query);
     const exactIds = new Set(exact.map((item) => item.id));
     const merged = [...exact, ...semantic.filter((item) => !exactIds.has(item.id))];
     const deduped = Array.from(new Map(merged.map((item) => [item.id, item])).values());

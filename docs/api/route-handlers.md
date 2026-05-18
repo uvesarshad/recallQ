@@ -1,135 +1,63 @@
-# API Route Handlers
+# REST API Route Handlers
 
-> **Scope:** This document lists and describes all the API route handlers in the `/app/api` directory. **Rendering context:** Server **Last updated:** auto
+> Scope: Documents all backend REST API endpoints, method signatures, query/payload shapes, authentication guards, and response objects.
+> Rendering context: Server-side
+> Project tier: 4
+> Last updated: 2026-05-17
 
 ## Overview
+Recall exposes a robust REST API under the app/api/ directory to handle items capture, search, AI chat, graph indexing, profile editing, and webhook handlers. All endpoints enforce strict session validation via NextAuth or secure API tokens, and output standard JSON payloads.
 
-API Route Handlers are used for tasks that cannot be handled by Server Actions or need to be called from external services (webhooks). Most routes require authentication and perform a specific, narrow function. They primarily act as a server-side gateway to the business logic defined in the `/lib` directory.
+## REST Route Directory
 
----
+### Ingestion and Capture Endpoints
 
-## Authentication & User
+- api/ingest [POST]: Gateway for manual captures and extension saves. Accepts a JSON body containing type (url, text, file, note), source, raw text or URL, optional files, and overrides. Authenticates via session or x-internal-ingest-token. Returns an ingestion success object with item ID and a pending enrichment status.
+- api/files [POST]: Multipart file capture handler. Validates file MIME types and size limits against user tiers. Saves the file buffer locally and returns the item record.
+- api/actions/preview [POST]: Receives draft capture notes. Generates real-time predictions of tags, target folders, and reminders from the text body using Gemini models. Returns predicted properties and extraction confidence.
 
-### `GET /api/auth/[...nextauth]`
-- **File:** `app/api/auth/[...nextauth]/route.ts`
-- **Purpose:** The catch-all route for NextAuth.js. Handles all authentication strategies, including sign-in, sign-out, session creation, and provider callbacks.
-- **Auth:** Public (handles the authentication process itself).
+### Archive Items Endpoints
 
-### `GET /api/me`
-- **File:** `app/api/me/route.ts`
-- **Purpose:** Fetches profile information for the currently authenticated user.
-- **Auth:** Required.
+- api/items [GET]: Queries the user's item list. Accepts query parameters: q (fuzzy keywords search), tag, collection (folder UUID), type, cursor (for pagination), and limit (max 50). Returns items list, nextCursor value, and a boolean indicating if more items exist.
+- api/items [POST]: Creates a manual archive item, calling the ingestion engine.
+- api/items/[id] [GET]: Fetches metadata for a single item by UUID. Returns the full item object.
+- api/items/[id] [PATCH]: Updates item parameters (title, summary, tags, folder, reminders, or canvas positioning coordinates). Evaluates comment actions if note updates contain commands. Returns the updated item.
+- api/items/[id] [DELETE]: Permanently deletes an item and cleans up associated files. Returns success.
+- api/items/batch [POST]: Processes bulk operations. Accepts a JSON list of item IDs and action strings (archive, delete, tag, move). Implements client-side delay for undo support. Returns success.
 
----
+### Search and Retrieval Endpoints
 
-## Ingestion
+- api/search [GET]: Specialized hybrid search endpoint. Performs SQL matches and optional vector cosine similarity queries to return top matches with relevance ranks. If vector support or embeddings are unavailable, hybrid mode falls back to exact/basic SQL results with a successful response.
+- api/chat [POST]: AI chat drawer endpoint. Accepts a list of messages. Embeds the last query, retrieves relevant context items, generates answers using Gemini, and streams chunks and citations back to the client drawer as a Server-Sent Event stream.
+- api/graph [GET]: Generates map visuals. Accepts minimum connection thresholds and filter types. Queries items and their relationships from item_relations. Returns nodes list and edges list.
 
-### `POST /api/ingest`
-- **File:** `app/api/ingest/route.ts`
-- **Purpose:** The central endpoint for all new data captured in the system. Accepts single or bulk items.
-- **Auth:** Required (uses a special ingestion token).
-- **AGENT SEE:** `docs/architecture/data-flow.md#2-ingestion-the-single-funnel`
+### Collections and Billing Endpoints
 
-### `POST /api/email/inbound`
-- **File:** `app/api/email/inbound/route.ts`
-- **Purpose:** A webhook to receive inbound emails. It parses the email content and forwards it to the `/api/ingest` endpoint.
-- **Auth:** Public (security is handled by the obscurity of the webhook URL and/or provider signature verification).
+- api/collections [GET/POST/DELETE]: Lists folders, creates a folder (with custom color and icon), or deletes folders.
+- api/payments/create-subscription [POST]: Creates a Razorpay subscription transaction for Starter or Pro plans. Updates the database and returns the Razorpay transaction payload.
+- api/payments/cancel-subscription [POST]: Sets user subscription to cancel at the end of the active billing cycle.
+- api/payments/webhook [POST]: Listens to payment completions from Razorpay, validates webhook signatures, and updates user limits.
+- api/reminders [GET/PATCH]: Lists user reminders or updates due remind dates.
 
-### `POST /api/telegram/webhook`
-- **File:** `app/api/telegram/webhook/route.ts`
-- **Purpose:** A webhook to receive messages from the user's connected Telegram bot. It processes the message and forwards it to the `/api/ingest` endpoint.
-- **Auth:** Public (security is handled by a secret in the webhook URL).
+### Integration and User Webhooks
 
----
+- api/telegram [POST]: Webhook endpoint that parses text/files from the Telegram bot, links Telegram IDs to user profile records, and replies via Telegram.
+- api/email [POST]: Inbound email webhook parser. Receives email attachments and text, resolving matching users.
+- api/me [GET] / api/user [PATCH]: Returns active profile details or patches name, bio, timezone, and consent options.
 
-## Core Data Models
+## Security Constraints
+- AGENT AVOID: Never return raw SQL connection errors or stack traces to the client. Always catch API exceptions and return clean error responses.
+- AGENT NOTE: All external webhooks (such as Razorpay, email, and Telegram) must validate inbound signatures to prevent request spoofing.
 
-### Items
-- **`GET /api/items`**: Lists all items for the current user.
-  - **File:** `app/api/items/route.ts`
-  - **Auth:** Required.
-- **`GET /api/items/[id]`**: Retrieves a single item by its ID.
-  - **File:** `app/api/items/[id]/route.ts`
-  - **Auth:** Required.
-- **`GET /api/items/[id]/comments`**: Fetches comments for a specific item.
-  - **File:** `app/api/items/[id]/comments/route.ts`
-  - **Auth:** Required.
-- **`GET /api/items/[id]/related`**: Fetches items related to a specific item.
-  - **File:** `app/api/items/[id]/related/route.ts`
-  - **Auth:** Required.
-
-### Collections
-- **`GET, POST /api/collections`**: Lists all collections or creates a new one.
-  - **File:** `app/api/collections/route.ts`
-  - **Auth:** Required.
-- **`GET, PUT, DELETE /api/collections/[id]`**: Retrieves, updates, or deletes a single collection.
-  - **File:** `app/api/collections/[id]/route.ts`
-  - **Auth:** Required.
-
-### Reminders
-- **`GET, POST /api/reminders`**: Lists all reminders or creates a new one.
-  - **File:** `app/api/reminders/route.ts`
-  - **Auth:** Required.
-- **`GET, DELETE /api/reminders/[id]`**: Retrieves or deletes a single reminder.
-  - **File:** `app/api/reminders/[id]/route.ts`
-  - **Auth:** Required.
-
----
-
-## Features
-
-### `POST /api/chat`
-- **File:** `app/api/chat/route.ts`
-- **Purpose:** Handles requests for the AI chat functionality. Likely streams responses from the Gemini API.
-- **Auth:** Required.
-
-### `GET /api/graph`
-- **File:** `app/api/graph/route.ts`
-- **Purpose:** Fetches the nodes (items) and edges (relations) required to render the knowledge graph.
-- **Auth:** Required.
-
-### `POST /api/search`
-- **File:** `app/api/search/route.ts`
-- **Purpose:** Performs a full-text or vector search over the user's items.
-- **Auth:** Required.
-
-### `POST /api/actions/preview`
-- **File:** `app/api/actions/preview/route.ts`
-- **Purpose:** Takes a string of text and returns a preview of the actions (tags, reminders, etc.) that would be inferred from it. Used by the `CaptureBar` component.
-- **Auth:** Required.
-
-### `GET /api/files/[...path]`
-- **File:** `app/api/files/[...path]/route.ts`
-- **Purpose:** Securely serves files associated with items. The path likely includes the user ID and item ID to ensure authorization.
-- **Auth:** Required.
-
----
-
-## Integrations
-
-### Telegram
-- **`GET /api/user/telegram-token`**: Generates a new, short-lived token for linking a Telegram account.
-  - **File:** `app/api/user/telegram-token/route.ts`
-  - **Auth:** Required.
-- **`POST /api/user/telegram-link`**: Uses the token to create the link between the user and their Telegram chat ID.
-  - **File:** `app/api/user/telegram-link/route.ts`
-  - **Auth:** Required.
-- **`GET /api/user/telegram-status`**: Checks if the user's Telegram account is successfully linked.
-  - **File:** `app/api/user/telegram-status/route.ts`
-  - **Auth:** Required.
-
-### Payments
-- **`POST /api/payments/create-subscription`**: Creates a payment session (e.g., with Stripe Checkout) to start a new subscription.
-  - **File:** `app/api/payments/create-subscription/route.ts`
-  - **Auth:** Required.
-- **`POST /api/payments/cancel-subscription`**: Cancels the user's active subscription.
-  - **File:** `app/api/payments/cancel-subscription/route.ts`
-  - **Auth:** Required.
-- **`POST /api/payments/webhook`**: A webhook to receive events from the payment provider (e.g., subscription created, payment failed).
-  - **File:** `app/api/payments/webhook/route.ts`
-  - **Auth:** Public (signature verification performed).
+## Update Triggers
+- When adding, renaming, or deleting an API route handler under app/api/.
+- When altering the parameters or response shapes of an existing REST route.
+- When changing request authentication guards or token headers.
 
 ## Related Docs
+- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) — Index of API directories.
+- [docs/architecture/data-flow.md](file:///e:/Projects/recallQ/docs/architecture/data-flow.md) — Ingestion pipelines.
+- [docs/modules/capture.md](file:///e:/Projects/recallQ/docs/modules/capture.md) — Capture routing details.
 
-- [docs/architecture/data-flow.md] — Shows how ingestion routes fit into the overall data lifecycle.
-- [docs/lib/request-auth.md] — Describes the helpers used to authenticate requests in these routes.
+AGENT OWNER: app/api/
+AGENT UPDATE: docs/api/route-handlers.md

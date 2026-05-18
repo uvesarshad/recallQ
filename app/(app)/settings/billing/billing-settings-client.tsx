@@ -10,6 +10,16 @@ declare global {
   }
 }
 
+type UsageStats = {
+  saves_this_month: number;
+  max_saves_per_month: number;
+  storage_used_bytes: number;
+  max_storage_bytes: number;
+  chat_queries_today: number;
+  chat_queries_reset_date: string | null;
+  max_chat_queries_per_day: number;
+};
+
 type ProfileResponse = {
   user: {
     name?: string | null;
@@ -26,6 +36,7 @@ type ProfileResponse = {
     enabled: boolean;
     selfHosted: boolean;
   };
+  usage?: UsageStats | null;
 };
 
 const planCards = [
@@ -56,6 +67,39 @@ function formatDate(value?: string | null) {
     month: "short",
     day: "numeric",
   }).format(new Date(value));
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function UsageMeter({ label, used, max, unit }: { label: string; used: number; max: number; unit?: string }) {
+  const isUnlimited = !isFinite(max);
+  const pct = isUnlimited ? 0 : Math.min(100, (used / max) * 100);
+  const displayUsed = unit === "bytes" ? formatBytes(used) : used.toLocaleString();
+  const displayMax = isUnlimited ? "∞" : unit === "bytes" ? formatBytes(max) : max.toLocaleString();
+
+  return (
+    <div className="rounded-cards border border-border bg-bg p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs uppercase tracking-wide text-text-muted">{label}</span>
+        <span className="text-sm font-medium text-text-primary">
+          {displayUsed} / {displayMax}
+        </span>
+      </div>
+      {!isUnlimited && (
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border">
+          <div
+            className={`h-full rounded-full transition-all ${pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-brand"}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 async function ensureRazorpayScript() {
@@ -175,12 +219,37 @@ export default function BillingSettingsClient() {
   }
 
   const user = profile.user;
+  const usage = profile.usage;
   const currentPlan = user.plan;
   const currentEnd = formatDate(user.subscription_current_end);
   const hasPaidSubscription = currentPlan !== "free";
 
   return (
     <div className="space-y-6">
+      {usage && (
+        <section className="rounded-modals border border-border bg-surface p-6">
+          <h2 className="text-lg font-semibold text-text-primary">Usage this period</h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <UsageMeter
+              label="Saves this month"
+              used={usage.saves_this_month}
+              max={usage.max_saves_per_month}
+            />
+            <UsageMeter
+              label="Storage used"
+              used={usage.storage_used_bytes}
+              max={usage.max_storage_bytes}
+              unit="bytes"
+            />
+            <UsageMeter
+              label="Chat queries today"
+              used={usage.chat_queries_today}
+              max={usage.max_chat_queries_per_day}
+            />
+          </div>
+        </section>
+      )}
+
       <section className="rounded-modals border border-border bg-surface p-6">
         <h1 className="text-lg font-semibold text-text-primary">Annual plans</h1>
         <p className="mt-2 text-sm text-text-muted">

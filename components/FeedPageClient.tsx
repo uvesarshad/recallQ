@@ -2,14 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDownAZ,
   CalendarClock,
   CheckSquare2,
-  ChevronLeft,
   ChevronRight,
   FolderCog,
   FolderPlus,
-  Funnel,
   Grid2X2,
   Hash,
   Layers3,
@@ -20,7 +17,6 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ItemCard from "@/components/ItemCard";
-import Tooltip from "@/components/Tooltip";
 import {
   ARCHIVE_ITEM_CREATED_EVENT,
   ARCHIVE_ITEMS_CHANGED_EVENT,
@@ -100,6 +96,8 @@ export default function FeedPageClient({
   const [bulkReminderAt, setBulkReminderAt] = useState("");
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
+  const [deleteCountdown, setDeleteCountdown] = useState(5);
+  const countdownRef = useRef<number | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string>("");
   const [folderEditName, setFolderEditName] = useState("");
   const [folderEditIcon, setFolderEditIcon] = useState("");
@@ -424,6 +422,18 @@ export default function FeedPageClient({
       setBatchError(null);
       resetSelection();
 
+      setDeleteCountdown(5);
+      if (countdownRef.current) window.clearInterval(countdownRef.current);
+      countdownRef.current = window.setInterval(() => {
+        setDeleteCountdown((prev) => {
+          if (prev <= 1) {
+            if (countdownRef.current) { window.clearInterval(countdownRef.current); countdownRef.current = null; }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
       deleteTimeoutRef.current = window.setTimeout(async () => {
         const pendingDelete = pendingDeleteRef.current;
         if (!pendingDelete) {
@@ -513,6 +523,10 @@ export default function FeedPageClient({
       window.clearTimeout(deleteTimeoutRef.current);
       deleteTimeoutRef.current = null;
     }
+    if (countdownRef.current) {
+      window.clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
 
     setItems(pendingDelete.previousItems);
     pendingDeleteRef.current = null;
@@ -522,36 +536,14 @@ export default function FeedPageClient({
 
   useEffect(() => {
     return () => {
-      if (deleteTimeoutRef.current) {
-        window.clearTimeout(deleteTimeoutRef.current);
-      }
+      if (deleteTimeoutRef.current) window.clearTimeout(deleteTimeoutRef.current);
+      if (countdownRef.current) window.clearInterval(countdownRef.current);
     };
   }, []);
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-8">
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">
-            <Sparkles className="h-3 w-3" />
-            Capture, organize, recall
-          </div>
-          <h1 className="text-2xl font-semibold text-text-primary">Your archive</h1>
-          <p className="text-sm text-text-muted">Sort the archive, filter by type, batch-edit items, and keep folders visually distinct.</p>
-        </div>
-        {tagsCollapsed ? (
-          <div className="hidden xl:block">
-            <Tooltip content="Expand sidebar" position="left">
-              <button
-                onClick={() => setTagsCollapsed(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white shadow-brand-glow shadow-md transition-transform hover:scale-105 active:scale-95"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-            </Tooltip>
-          </div>
-        ) : null}
-      </div>
+      <h1 className="mb-4 text-xl font-semibold text-text-primary">Your archive</h1>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {presetOptions.map(({ label, value, icon: Icon }) => {
@@ -576,10 +568,9 @@ export default function FeedPageClient({
 
       <div className={`grid gap-6 transition-all duration-300 ${tagsCollapsed ? "xl:grid-cols-[1fr_0rem]" : "xl:grid-cols-[minmax(0,1fr)_18rem]"}`}>
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3 rounded-modals border border-border bg-surface p-3">
-            <label className="inline-flex items-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-sm text-text-mid">
-              <Funnel className="h-4 w-4 text-brand" />
-              <span className="text-text-muted">Type</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm text-text-muted">
+              <span>Type</span>
               <select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value as FeedType)}
@@ -593,9 +584,8 @@ export default function FeedPageClient({
               </select>
             </label>
 
-            <label className="inline-flex items-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-sm text-text-mid">
-              <ArrowDownAZ className="h-4 w-4 text-brand" />
-              <span className="text-text-muted">Sort</span>
+            <label className="inline-flex items-center gap-1.5 text-sm text-text-muted">
+              <span>Sort</span>
               <select
                 value={sort}
                 onChange={(event) => setSort(event.target.value as FeedSort)}
@@ -607,8 +597,8 @@ export default function FeedPageClient({
               </select>
             </label>
 
-            <label className="inline-flex items-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-sm text-text-mid">
-              <span className="text-text-muted">Source</span>
+            <label className="inline-flex items-center gap-1.5 text-sm text-text-muted">
+              <span>Source</span>
               <select
                 value={sourceFilter}
                 onChange={(event) => setSourceFilter(event.target.value as FeedSource)}
@@ -622,8 +612,8 @@ export default function FeedPageClient({
               </select>
             </label>
 
-            <label className="inline-flex items-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-sm text-text-mid">
-              <span className="text-text-muted">Folder</span>
+            <label className="inline-flex items-center gap-1.5 text-sm text-text-muted">
+              <span>Folder</span>
               <select
                 value={selectedFolderId}
                 onChange={(event) => setSelectedFolderId(event.target.value)}
@@ -641,9 +631,9 @@ export default function FeedPageClient({
             <button
               type="button"
               onClick={() => setMobileTagsOpen((current) => !current)}
-              className="inline-flex items-center gap-2 rounded-buttons border border-border bg-bg px-3 py-2 text-sm text-text-mid hover:text-text-primary xl:hidden"
+              className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-primary xl:hidden"
             >
-              <Hash className="h-4 w-4 text-brand" />
+              <Hash className="h-4 w-4" />
               Tags
               {selectedTags.length > 0 ? (
                 <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs text-brand">{selectedTags.length}</span>
@@ -669,7 +659,7 @@ export default function FeedPageClient({
               {selectionMode ? "Exit select" : "Select"}
             </button>
 
-            <div className="ml-auto flex items-center gap-2 rounded-buttons border border-border bg-bg p-1">
+            <div className="ml-auto flex items-center gap-1">
               <button
                 className={`rounded-buttons px-3 py-2 text-sm ${view === "list" ? "bg-brand text-white" : "text-text-muted"}`}
                 onClick={() => setView("list")}
@@ -691,10 +681,9 @@ export default function FeedPageClient({
             <div className="mt-3 rounded-modals border border-border bg-surface p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">Batch actions</div>
-                  <p className="mt-1 text-sm text-text-primary">
-                    {selectedIds.length === 0 ? "Select items to update or delete them together." : `${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"} selected`}
-                  </p>
+                  {selectedIds.length > 0 ? (
+                    <p className="text-sm text-text-primary">{selectedIds.length} item{selectedIds.length === 1 ? "" : "s"} selected</p>
+                  ) : null}
                 </div>
                 {selectedIds.length > 0 ? (
                   <button type="button" onClick={() => setSelectedIds(filteredItems.map((item) => item.id))} className="text-xs text-brand hover:text-brand-hover">
@@ -755,7 +744,7 @@ export default function FeedPageClient({
               <div>
                 <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200/80">Pending delete</div>
                 <p className="mt-1 text-sm text-amber-100">
-                  {pendingDeleteCount} item{pendingDeleteCount === 1 ? "" : "s"} removed. Undo before they are deleted permanently.
+                  {pendingDeleteCount} item{pendingDeleteCount === 1 ? "" : "s"} will be permanently deleted in {deleteCountdown}s.
                 </p>
               </div>
               <button
@@ -823,8 +812,32 @@ export default function FeedPageClient({
           </div>
 
           {filteredItems.length === 0 ? (
-            <div className="mt-8 rounded-modals border border-border bg-surface p-8 text-center text-sm text-text-mid">
-              No items match the current filters.
+            <div className="mt-8 rounded-modals border border-border bg-surface p-8 text-center">
+              <p className="text-sm text-text-mid">No items match the current filters.</p>
+              {activeFiltersCount > 0 ? (
+                <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs text-text-muted">
+                  {typeFilter !== "all" && <span className="rounded-full border border-border bg-bg px-2 py-1">Type: {typeFilter}</span>}
+                  {sourceFilter !== "all" && <span className="rounded-full border border-border bg-bg px-2 py-1">Source: {sourceFilter}</span>}
+                  {activePreset !== "all" && <span className="rounded-full border border-border bg-bg px-2 py-1">Preset: {activePreset}</span>}
+                  {selectedFolderId && <span className="rounded-full border border-border bg-bg px-2 py-1">Folder: {folderRecords.find(f => f.id === selectedFolderId)?.name ?? "selected"}</span>}
+                  {selectedTags.map(tag => <span key={tag} className="rounded-full border border-border bg-bg px-2 py-1">#{tag}</span>)}
+                </div>
+              ) : null}
+              {activeFiltersCount > 0 ? (
+                <button
+                  type="button"
+                  className="mt-4 rounded-full bg-brand/10 px-4 py-1.5 text-sm text-brand"
+                  onClick={() => {
+                    setTypeFilter("all");
+                    setSourceFilter("all");
+                    setSelectedTags([]);
+                    setSelectedFolderId("");
+                    setActivePreset("all");
+                  }}
+                >
+                  Clear all filters
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -846,8 +859,7 @@ export default function FeedPageClient({
           <div className="rounded-modals border border-border bg-surface p-4">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">Folders</div>
-                <p className="mt-1 text-sm text-text-primary">Pin the archive into named buckets and style them for faster scanning.</p>
+                <p className="text-xs font-medium text-text-primary">Folders</p>
               </div>
               <button
                 type="button"
@@ -987,8 +999,7 @@ function TagCloud({
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">Tag cloud</div>
-          <p className="mt-1 text-sm text-text-primary">Use tags as a secondary filter rail.</p>
+          <p className="text-xs font-medium text-text-primary">Tags</p>
         </div>
         {selectedTags.length > 0 ? (
           <button type="button" onClick={onClear} className="text-xs text-brand hover:text-brand-hover">

@@ -8,6 +8,7 @@ import type { ProfileRecord } from "@/lib/types";
 export default function ProfileSettingsClient() {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deletePending, setDeletePending] = useState(false);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
@@ -37,8 +38,6 @@ export default function ProfileSettingsClient() {
   }
 
   async function deleteProfile() {
-    const confirmed = window.confirm("Delete your Recall profile? This removes all saved items and comments.");
-    if (!confirmed) return;
     await fetch("/api/me", { method: "DELETE" });
     window.location.href = "/";
   }
@@ -64,22 +63,25 @@ export default function ProfileSettingsClient() {
             value={profile.name || ""}
             onChange={(e) => updateProfile({ name: e.target.value })}
             placeholder="Name"
+            aria-label="Display name"
             className="rounded-input border border-border bg-bg px-4 py-3 text-sm outline-none focus:border-brand"
           />
-          <input value={profile.email || ""} disabled className="rounded-input border border-border bg-bg px-4 py-3 text-sm text-text-muted" />
+          <input value={profile.email || ""} disabled aria-label="Email address (read-only)" className="rounded-input border border-border bg-bg px-4 py-3 text-sm text-text-muted" />
           <input
             value={profile.timezone || ""}
             onChange={(e) => updateProfile({ timezone: e.target.value })}
             placeholder="Timezone"
+            aria-label="Timezone"
             className="rounded-input border border-border bg-bg px-4 py-3 text-sm outline-none focus:border-brand"
           />
-          <input value={profile.plan || ""} disabled className="rounded-input border border-border bg-bg px-4 py-3 text-sm text-text-muted" />
+          <input value={profile.plan || ""} disabled aria-label="Plan (read-only)" className="rounded-input border border-border bg-bg px-4 py-3 text-sm text-text-muted" />
         </div>
         <textarea
           value={profile.bio || ""}
           onChange={(e) => updateProfile({ bio: e.target.value })}
           rows={4}
           placeholder="Short bio"
+          aria-label="Bio"
           className="mt-4 w-full rounded-input border border-border bg-bg px-4 py-3 text-sm outline-none focus:border-brand"
         />
         <div className="mt-4 flex justify-end">
@@ -96,11 +98,11 @@ export default function ProfileSettingsClient() {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-text-primary">Password and security</h2>
-            <p className="text-sm text-text-muted">This build uses Google OAuth and magic links. There is no local password to rotate.</p>
+            <p className="text-sm text-text-muted">This build supports Google OAuth and email/password sign-in.</p>
           </div>
         </div>
         <div className="rounded-cards border border-border bg-bg p-4 text-sm text-text-muted">
-          Use your identity provider settings for password changes and MFA. Theme, chat history, and sidebar preferences remain local to this browser.
+          Password rotation is not exposed in settings yet. Use your Google account settings for OAuth security. Theme, chat history, and sidebar preferences remain local to this browser.
         </div>
       </section>
 
@@ -132,9 +134,17 @@ export default function ProfileSettingsClient() {
           <h2 className="text-lg font-semibold text-text-primary">Delete profile</h2>
         </div>
         <p className="text-sm text-text-muted">This permanently deletes your account and all associated Recall data.</p>
-        <button onClick={deleteProfile} className="mt-4 rounded-buttons bg-red-600 px-4 py-2 text-sm font-medium text-white">
-          Delete profile
-        </button>
+        {deletePending ? (
+          <div className="mt-4 flex items-center gap-3 rounded-buttons bg-red-600/10 border border-red-600/30 px-4 py-3">
+            <span className="flex-1 text-sm text-red-700 dark:text-red-400">This cannot be undone. Delete your account permanently?</span>
+            <button onClick={() => setDeletePending(false)} className="text-sm text-text-muted hover:text-text-primary">Cancel</button>
+            <button onClick={deleteProfile} className="rounded-buttons bg-red-600 px-3 py-1.5 text-sm font-medium text-white">Delete</button>
+          </div>
+        ) : (
+          <button onClick={() => setDeletePending(true)} className="mt-4 rounded-buttons border border-red-600/40 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-600 hover:text-white transition-colors">
+            Delete profile
+          </button>
+        )}
       </section>
     </div>
   );

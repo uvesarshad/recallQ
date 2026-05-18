@@ -33,6 +33,12 @@ function normalizeInboundPayload(payload: unknown) {
 }
 
 export async function POST(req: Request) {
+  // Fail closed: at least one verification secret must be configured.
+  if (!env.RESEND_WEBHOOK_SECRET && !env.RESEND_INBOUND_SECRET) {
+    console.error("Email inbound endpoint called but no verification secret is configured. Rejecting.");
+    return apiError("Unauthorized", 401);
+  }
+
   const rawBody = await req.text();
   let parsedBody: unknown;
 
@@ -48,14 +54,13 @@ export async function POST(req: Request) {
         },
       });
     } else {
-      if (env.RESEND_INBOUND_SECRET) {
-        const signature = req.headers.get("x-resend-signature") ?? req.headers.get("authorization");
-        if (
-          signature !== env.RESEND_INBOUND_SECRET &&
-          signature !== `Bearer ${env.RESEND_INBOUND_SECRET}`
-        ) {
-          return apiError("Unauthorized", 401);
-        }
+      // RESEND_INBOUND_SECRET is guaranteed to be set here (checked above).
+      const signature = req.headers.get("x-resend-signature") ?? req.headers.get("authorization");
+      if (
+        signature !== env.RESEND_INBOUND_SECRET &&
+        signature !== `Bearer ${env.RESEND_INBOUND_SECRET}`
+      ) {
+        return apiError("Unauthorized", 401);
       }
 
       parsedBody = JSON.parse(rawBody);

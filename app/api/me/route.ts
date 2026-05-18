@@ -1,6 +1,7 @@
 import { apiError, apiOk } from "@/lib/api";
 import { isBillingEnabled, isSelfHosted } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { getPlanLimits } from "@/lib/plan-limits";
 import { requireSessionUser } from "@/lib/request-auth";
 import { z } from "zod";
 
@@ -25,18 +26,32 @@ export async function GET() {
             inbound_email_address, plan, created_at,
             subscription_plan, subscription_status, subscription_current_start,
             subscription_current_end, subscription_cancel_at_cycle_end,
-            razorpay_subscription_id
+            razorpay_subscription_id,
+            saves_this_month, storage_used_bytes,
+            chat_queries_today, chat_queries_reset_date
      FROM users
      WHERE id = $1`,
     [user.id],
   );
 
+  const row = result.rows[0] ?? null;
+  const limits = row ? getPlanLimits(row.plan ?? "free") : null;
+
   return apiOk({
-    user: result.rows[0] ?? null,
+    user: row,
     billing: {
       enabled: isBillingEnabled(),
       selfHosted: isSelfHosted(),
     },
+    usage: row && limits ? {
+      saves_this_month: row.saves_this_month ?? 0,
+      max_saves_per_month: limits.maxSavesPerMonth,
+      storage_used_bytes: row.storage_used_bytes ?? 0,
+      max_storage_bytes: limits.maxStorageBytes,
+      chat_queries_today: row.chat_queries_today ?? 0,
+      chat_queries_reset_date: row.chat_queries_reset_date ?? null,
+      max_chat_queries_per_day: limits.chatQueriesPerDay,
+    } : null,
   });
 }
 

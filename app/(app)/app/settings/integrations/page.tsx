@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AppIntegrationsPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/app/login");
+  if (!session?.user?.id) redirect("/login");
 
   const result = await db.query(
     "SELECT inbound_email_address, telegram_chat_id FROM users WHERE id = $1",

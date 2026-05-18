@@ -43,4 +43,6 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 
-/temp
+temp/
+PRD.md
+node_modules/

@@ -23,6 +23,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
   const [overrides, setOverrides] = useState<ActionOverrideValue>({});
   const [loading, setLoading] = useState(false);
   const [savingMeta, setSavingMeta] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftSummary, setDraftSummary] = useState("");
   const [draftTagsInput, setDraftTagsInput] = useState("");
@@ -125,8 +126,6 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
   }
 
   async function deleteItem() {
-    const confirmed = window.confirm("Delete this item?");
-    if (!confirmed) return;
     await fetch(`/api/items/${itemId}`, { method: "DELETE" });
     dispatchArchiveItemsChanged();
     onClose();
@@ -187,6 +186,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
+          setDeletePending(false);
           onClose();
         }
       }}
@@ -194,21 +194,49 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby="item-detail-title"
         className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-modals border border-border bg-surface shadow-2xl"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-text-muted">{item?.type || "item"}</div>
-            <h2 className="text-lg font-semibold text-text-primary">{draftTitle || item?.title || "Untitled"}</h2>
+        <div className="shrink-0 border-b border-border">
+          <div className="flex items-center justify-between px-5 py-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-text-muted">{item?.type || "item"}</div>
+              <h2 id="item-detail-title" className="text-lg font-semibold text-text-primary">{draftTitle || item?.title || "Untitled"}</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                aria-label="Delete item"
+                onClick={() => setDeletePending(true)}
+                className="rounded-buttons p-2 text-rose-400 hover:bg-surface-2"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <button aria-label="Close" onClick={() => { setDeletePending(false); onClose(); }} className="rounded-buttons p-2 text-text-muted hover:bg-surface-2">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => void deleteItem()} className="rounded-buttons p-2 text-rose-400 hover:bg-surface-2">
-              <Trash2 className="h-4 w-4" />
-            </button>
-            <button onClick={onClose} className="rounded-buttons p-2 text-text-muted hover:bg-surface-2">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          {deletePending ? (
+            <div className="flex items-center justify-between gap-4 border-t border-rose-500/20 bg-rose-500/5 px-5 py-3">
+              <p className="text-sm text-rose-300">Permanently delete this item? This cannot be undone.</p>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletePending(false)}
+                  className="rounded-buttons border border-border bg-surface px-3 py-1.5 text-sm text-text-primary hover:bg-surface-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteItem()}
+                  className="rounded-buttons bg-rose-600 px-3 py-1.5 text-sm font-medium text-white"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[1.5fr_1fr]">
@@ -220,6 +248,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
                   placeholder="Untitled"
+                  aria-label="Item title"
                   className="w-full rounded-input border border-border bg-bg px-3 py-3 text-base font-semibold text-text-primary outline-none focus:border-brand"
                 />
               </section>
@@ -231,6 +260,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
                   onChange={(event) => setDraftSummary(event.target.value)}
                   rows={4}
                   placeholder="Add a concise summary for this item."
+                  aria-label="Item summary"
                   className="w-full rounded-input border border-border bg-bg px-3 py-3 text-sm text-text-primary outline-none focus:border-brand"
                 />
               </section>
@@ -281,6 +311,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
                     value={draftTagsInput}
                     onChange={(event) => setDraftTagsInput(event.target.value)}
                     placeholder="ai, reading, startup"
+                    aria-label="Tags, comma-separated"
                     className="w-full rounded-input border border-border bg-bg px-3 py-3 text-sm text-text-primary outline-none focus:border-brand"
                   />
                   <div className="flex flex-wrap gap-2">
@@ -302,6 +333,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
                   <select
                     value={draftCollectionId}
                     onChange={(event) => setDraftCollectionId(event.target.value)}
+                    aria-label="Assign to folder"
                     className="w-full rounded-input border border-border bg-bg px-3 py-3 text-sm text-text-primary outline-none focus:border-brand"
                   >
                     <option value="">No folder</option>
@@ -315,6 +347,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
                     value={draftNewCategory}
                     onChange={(event) => setDraftNewCategory(event.target.value)}
                     placeholder="Or create a new folder"
+                    aria-label="Create new folder"
                     className="w-full rounded-input border border-border bg-bg px-3 py-3 text-sm text-text-primary outline-none focus:border-brand"
                   />
                 </div>
@@ -350,7 +383,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
                 {draftReminderAt ? (
                   <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand/10 px-3 py-1 text-xs text-brand">
                     <Calendar className="h-3 w-3" />
-                    Reminds at {new Date(draftReminderAt).toLocaleString("en-IN")}
+                    Reminds at {new Date(draftReminderAt).toLocaleString()}
                   </div>
                 ) : null}
               </section>
@@ -387,7 +420,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
               {comments.map((entry) => (
                 <div key={entry.id} className="rounded-cards border border-border bg-bg p-3">
                   <p className="text-sm text-text-primary">{entry.body}</p>
-                  <p className="mt-2 text-xs text-text-muted">{new Date(entry.created_at).toLocaleString("en-IN")}</p>
+                  <p className="mt-2 text-xs text-text-muted">{new Date(entry.created_at).toLocaleString()}</p>
                 </div>
               ))}
               {comments.length === 0 ? <p className="text-sm text-text-muted">No comments yet.</p> : null}

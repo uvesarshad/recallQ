@@ -1,6 +1,7 @@
 import { apiError, apiOk } from "@/lib/api";
 import { db } from "@/lib/db";
 import { requireSessionUser } from "@/lib/request-auth";
+import { deleteFile } from "@/lib/storage";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -30,8 +31,8 @@ export async function GET(
     `SELECT items.id, items.type, items.title, items.summary, items.tags, items.source, items.created_at, items.updated_at,
             items.raw_url, items.raw_text, items.collection_id, collections.name AS collection_name,
             items.canvas_x, items.canvas_y, items.canvas_pinned,
-            enriched, enriched_at, reminder_at, reminder_sent, 
-            file_path, file_name, file_mime_type, capture_note, image_url
+            enriched, enriched_at, reminder_at, reminder_sent,
+            file_name, file_mime_type, capture_note, image_url
      FROM items
      LEFT JOIN collections ON collections.id = items.collection_id
      WHERE items.id = $1 AND items.user_id = $2`,
@@ -139,13 +140,20 @@ export async function DELETE(
   }
   const { id } = await params;
 
-  const result = await db.query(
-    "DELETE FROM items WHERE id = $1 AND user_id = $2",
+  const fileRow = await db.query(
+    "SELECT file_path FROM items WHERE id = $1 AND user_id = $2",
     [id, user.id]
   );
 
-  if (result.rowCount === 0) {
+  if (fileRow.rowCount === 0) {
     return apiError("Item not found or not owned by user", 404);
+  }
+
+  await db.query("DELETE FROM items WHERE id = $1 AND user_id = $2", [id, user.id]);
+
+  const filePath = fileRow.rows[0].file_path as string | null;
+  if (filePath) {
+    await deleteFile(user.id, filePath);
   }
 
   return apiOk({ success: true });

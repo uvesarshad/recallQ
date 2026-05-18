@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('web-push'\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(xargs basename -a)",
+      "Bash(node --experimental-strip-types tests/run-tests.ts)"
+    ]
+  }
+}

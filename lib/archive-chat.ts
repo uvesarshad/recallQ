@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
-import { embedText, getGeminiModel } from "@/lib/gemini";
+import { embedText, getGeminiModel, sanitizeForPrompt } from "@/lib/gemini";
 import { hasVectorSupport } from "@/lib/vector";
 
-type ArchiveCitation = {
+export type ArchiveCitation = {
   id: string;
   title?: string | null;
   url?: string | null;
@@ -17,6 +17,117 @@ type ArchiveQueryRow = {
   similarity: number | string;
 };
 
+type ArchiveContext = {
+  systemPrompt: string;
+  citations: ArchiveCitation[];
+  earlyAnswer?: string;
+};
+
+async function buildArchiveContext(userId: string, query: string, timezone: string): Promise<ArchiveContext> {
+  const trimmedQuery = query.trim();
+
+  const vectorEnabled = await hasVectorSupport();
+  if (!vectorEnabled) {
+    return { systemPrompt: "", citations: [], earlyAnswer: "Semantic archive Q&A is not available right now because vector search is not enabled." };
+  }
+
+  const embedding = await embedText(trimmedQuery);
+  if (!embedding) {
+    return { systemPrompt: "", citations: [], earlyAnswer: "I couldn't read that question. Please try again." };
+  }
+
+  const relevantItems = await db.query<ArchiveQueryRow>(
+    `SELECT id, title, summary, raw_text, raw_url,
+            1 - (embedding <=> $2::vector) AS similarity
+     FROM items
+     WHERE user_id = $1 AND embedding IS NOT NULL
+     ORDER BY embedding <=> $2::vector
+     LIMIT 10`,
+    [userId, JSON.stringify(embedding)]
+  );
+
+  const filteredItems = relevantItems.rows.filter((item) => Number(item.similarity) > 0.68);
+  if (filteredItems.length === 0) {
+    return { systemPrompt: "", citations: [], earlyAnswer: "I couldn't find any saved items related to your question." };
+  }
+
+  const contextItems = filteredItems
+    .map((item) => {
+      const parts = [`Title: ${sanitizeForPrompt(item.title || "Untitled", 120)}`];
+      if (item.summary) parts.push(`Summary: ${sanitizeForPrompt(item.summary, 400)}`);
+      if (item.raw_text) parts.push(`Content: ${sanitizeForPrompt(item.raw_text, 700)}`);
+      if (item.raw_url) parts.push(`URL: ${item.raw_url}`);
+      return parts.join("\n");
+    })
+    .join("\n\n---\n\n");
+
+  const systemPrompt = `You are a personal assistant for a user's saved content archive.
+Answer only from the provided saved items. If the answer is not present, say so clearly.
+Keep the answer concise and useful.
+Today's date: ${new Date().toISOString().split("T")[0]}. User's timezone: ${timezone}.
+
+Saved items most relevant to the question:
+${contextItems}`;
+
+  const citations = filteredItems.slice(0, 3).map((item) => ({
+    id: item.id,
+    title: item.title,
+    url: item.raw_url,
+  }));
+
+  return { systemPrompt, citations };
+}
+
+/** Streaming version — returns a ReadableStream of SSE-formatted chunks. */
+export async function streamArchiveAnswer({
+  userId,
+  query,
+  timezone = "IST",
+}: {
+  userId: string;
+  query: string;
+  timezone?: string;
+}): Promise<ReadableStream<Uint8Array>> {
+  const encoder = new TextEncoder();
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    return sseStaticStream(encoder, "Please send a question to search your archive.", []);
+  }
+
+  const ctx = await buildArchiveContext(userId, trimmedQuery, timezone);
+
+  if (ctx.earlyAnswer !== undefined) {
+    return sseStaticStream(encoder, ctx.earlyAnswer, ctx.citations);
+  }
+
+  const model = getGeminiModel();
+  const geminiStream = await model.generateContentStream([
+    { text: ctx.systemPrompt },
+    { text: `Question: ${sanitizeForPrompt(trimmedQuery, 500)}` },
+  ]);
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for await (const chunk of geminiStream.stream) {
+          const text = chunk.text();
+          if (text) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+          }
+        }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, citations: ctx.citations })}\n\n`));
+      } catch (err) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`));
+        console.error("Gemini stream error:", err);
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
+/** Non-streaming version used by Telegram bot and other non-SSE callers. */
 export async function answerArchiveQuestion({
   userId,
   query,
@@ -31,67 +142,28 @@ export async function answerArchiveQuestion({
     return { answer: "Please send a question to search your archive.", citations: [] as ArchiveCitation[] };
   }
 
-  const vectorEnabled = await hasVectorSupport();
-  if (!vectorEnabled) {
-    return {
-      answer: "Semantic archive Q&A is not available right now because vector search is not enabled.",
-      citations: [] as ArchiveCitation[],
-    };
+  const ctx = await buildArchiveContext(userId, trimmedQuery, timezone);
+
+  if (ctx.earlyAnswer !== undefined) {
+    return { answer: ctx.earlyAnswer, citations: ctx.citations };
   }
-
-  const embedding = await embedText(trimmedQuery);
-  if (!embedding) {
-    return { answer: "I couldn't read that question. Please try again.", citations: [] as ArchiveCitation[] };
-  }
-
-  const relevantItems = await db.query<ArchiveQueryRow>(
-    `SELECT id, title, summary, raw_text, raw_url, type,
-            1 - (embedding <=> $2::vector) as similarity
-     FROM items
-     WHERE user_id = $1 AND embedding IS NOT NULL
-     ORDER BY embedding <=> $2::vector
-     LIMIT 10`,
-    [userId, JSON.stringify(embedding)]
-  );
-
-  const filteredItems = relevantItems.rows.filter((item) => Number(item.similarity) > 0.68);
-  if (filteredItems.length === 0) {
-    return {
-      answer: "I couldn't find any saved items related to your question.",
-      citations: [] as ArchiveCitation[],
-    };
-  }
-
-  const contextItems = filteredItems
-    .map((item) => {
-      let content = `Title: ${item.title || "Untitled"}`;
-      if (item.summary) content += `\nSummary: ${item.summary}`;
-      if (item.raw_text) content += `\nContent: ${String(item.raw_text).slice(0, 700)}`;
-      if (item.raw_url) content += `\nURL: ${item.raw_url}`;
-      return content;
-    })
-    .join("\n\n---\n\n");
-
-  const systemPrompt = `You are a personal assistant for a user's saved content archive.
-Answer only from the provided saved items. If the answer is not present, say so clearly.
-Keep the answer concise and useful for Telegram.
-Today's date: ${new Date().toISOString().split("T")[0]}. User's timezone: ${timezone}.
-
-Saved items most relevant to the question:
-${contextItems}`;
 
   const model = getGeminiModel();
   const result = await model.generateContent([
-    { text: systemPrompt },
-    { text: `Question: ${trimmedQuery}` },
+    { text: ctx.systemPrompt },
+    { text: `Question: ${sanitizeForPrompt(trimmedQuery, 500)}` },
   ]);
 
   const answer = result.response.text().trim() || "I couldn't generate an answer from your saved items.";
-  const citations = filteredItems.slice(0, 3).map((item) => ({
-    id: item.id,
-    title: item.title,
-    url: item.raw_url,
-  }));
+  return { answer, citations: ctx.citations };
+}
 
-  return { answer, citations };
+function sseStaticStream(encoder: TextEncoder, answer: string, citations: ArchiveCitation[]): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: answer })}\n\n`));
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, citations })}\n\n`));
+      controller.close();
+    },
+  });
 }

@@ -1,63 +1,70 @@
-# Recally: AI-Powered Personal Knowledge Management
+# Recall Project Overview
 
-> **Scope:** This document provides a high-level overview of the Recally project, its architecture, and conventions. It is the primary entry point for AI agents. **Rendering context:** N/A **Last updated:** auto
+> Scope: High-level vision, tech stack, glossary, and index of Recall documentation.
+> Rendering context: N/A
+> Project tier: 4
+> Last updated: 2026-05-17
 
 ## Overview
+Recall is a frictionless capture and intelligent organization tool designed to make high-density personal knowledge searchable and navigable. It enables users to capture notes, URLs, and files from any surface (PWA, web, Telegram, or email), enrich them using Gemini AI, sync billing via Razorpay, and interact with their archive via search, LLM-based RAG chat, and a visual relationship map.
 
-Recally is a Next.js application designed to be a personal "second brain." It allows users to capture, connect, and explore their knowledge through a graph-based interface. The system ingests various data types (text, files, web content), uses AI to enrich and connect them, and provides tools for search, visualization, and retrieval. The primary interface is a web application, with data also accessible via integrations like Telegram and email.
+## Project Tier and Tech Stack
+Recall is classified as a Tier 4 production SaaS application. It features robust user authentication, a relational PostgreSQL database with vector similarity support, multi-tiered subscription limits, and offline background processing queues.
 
-## Project Context
+The technical stack consists of:
+- Framework: Next.js 14 using the App Router with a dark-first UI theme.
+- Runtime & Language: Node.js with strict TypeScript and direct TSX-based worker execution.
+- Styling: Tailwind CSS v4 and custom design tokens in the global stylesheet.
+- State Management: React local state and context-based state propagation with no third-party store.
+- Database: Raw PostgreSQL Pool client via the pg package, coupled with pgvector for semantic similarities.
+- Authentication: NextAuth v5 (beta) with PostgresAdapter, using Google OAuth and email/password credentials.
+- Payments: Razorpay API integration with webhook listeners to manage subscription tiers.
+- AI Services: Gemini API via the Google Generative AI SDK, using gemini-2.5-flash-lite for summary/tags and text-embedding-004 for vector embeddings.
+- Background Processing: Discrete, non-blocking daemon tasks for item enrichment and reminder dispatches.
 
-- **Project Name:** recally
-- **Purpose:** An AI-powered personal knowledge management and "second brain" application.
-- **Tech Stack:**
-  - **Framework:** Next.js (App Router)
-  - **Language:** TypeScript
-  - **Database:** PostgreSQL (using `pg`)
-  - **Authentication:** NextAuth.js (`next-auth@beta`)
-  - **Styling:** Tailwind CSS
-  - **UI:** React, `lucide-react` (icons), `@xyflow/react` & `react-force-graph-2d` (knowledge graph visualization)
-  - **AI:** Google Gemini (`@google/generative-ai`)
-  - **Background Workers:** Node.js scripts executed with `tsx`.
-- **Environment:**
-  - **Node Version:** Not pinned in `package.json`. Align the runtime with the currently installed Next.js toolchain before deploying or upgrading dependencies.
-  - **Next.js Version:** `latest`
-  - **Rendering Strategy:** Primarily Server-Side Rendering (SSR) with Server Components. Client-Side Rendering (CSR) is used for highly interactive components.
-  - **Deployment Target:** No platform-specific deployment adapter is hard-coded in the repo. Any host that can run a Next.js App Router app with the required environment variables, PostgreSQL access, and file storage integration can be used.
-
-## Documentation Directory
-
-- `docs/overview.md`: (This file) The main entry point for understanding the project.
-- `docs/architecture/folder-structure.md`: Explains the purpose of each top-level directory.
-- `docs/architecture/data-flow.md`: Describes how data moves through the application.
-- `docs/api/route-handlers.md`: Details all Next.js API route handlers.
-- `docs/api/database.md`: Describes the PostgreSQL database schema and conventions.
-- `docs/auth/auth-flow.md`: Explains the user authentication and session management process.
-- `docs/modules/ingestion.md`: Covers the system for capturing data from various sources.
-- `docs/modules/enrichment.md`: Details the AI-powered background job for processing items.
-- `docs/modules/graph.md`: Explains the knowledge graph visualization and data fetching.
-- `docs/ui/layout-system.md`: Describes the main application shell and layout structure.
-
-## Key Architectural Decisions
-
-- **App Router First:** The project uses the Next.js App Router, favoring Server Components for data fetching and rendering to keep the client-side bundle small.
-- **Server Components by Default:** Most components are Server Components. Client Components (marked with `"use client"`) are used only when interactivity is required and are typically located in the `components/` directory or as client-only page entry points.
-- **Centralized Data Logic in `lib/`:** Business logic, database queries, and external API interactions are consolidated in the `lib/` directory, separating them from the UI layer.
-- **API Routes for External Services:** API route handlers in `app/api/` are used primarily as endpoints for webhooks (e.g., Telegram, email) and for tasks that cannot be accomplished in Server Actions.
-- **Asynchronous Processing with Workers:** Computationally intensive or long-running tasks, like AI enrichment and sending reminders, are handled by standalone worker scripts in the `workers/` directory to avoid blocking the main application thread.
-
-## Cross-Cutting Concerns
-
-- **Authentication:** Handled by `next-auth`. The main configuration is in `app/api/auth/[...nextauth]/route.ts`, with session data managed via server-side utilities in `lib/auth.ts`. Most pages and APIs require an authenticated session.
-- **Data Fetching:** Primarily done in Server Components by directly calling functions from `lib/`. Client-side data fetching is used for dynamic UI elements and uses standard `fetch` calls to the application's API routes.
-- **Styling:** Tailwind CSS is used for all styling. Global styles are in `app/globals.css`. The `clsx` and `tailwind-merge` utilities are used for constructing conditional class names.
-- **Error Handling:** Route handlers generally use early auth checks, schema validation, and `apiError`/`apiOk` helpers for structured JSON responses. Integrations and worker-style flows rely on local `try/catch` blocks around external IO so failures can return actionable API errors without crashing the request.
+## Directory Map
+- docs/overview.md (This file): Entry index, technology overview, directory map, glossary, and changes log.
+- docs/architecture/folder-structure.md: Top-level layout and module grouping, naming rules, and convention boundaries.
+- docs/architecture/rendering-strategy.md: Next.js rendering modes, static routes, dynamic handlers, and auth checks.
+- docs/architecture/data-flow.md: Step-by-step lifecycles of capture, AI enrichment, vector mapping, and RAG retrieval.
+- docs/ui/component-library.md: Detailed layout of shared shell, dialogs, cards, and interactive visualization maps.
+- docs/ui/layout-system.md: Shared layouts, nested views, PWA setup, and user navigation panels.
+- docs/ui/theming.md: Colors, font scales, border radiuses, and spacing constants.
+- docs/api/route-handlers.md: Mapping and contracts for items, actions, chat, email, graph, me, reminders, and webhook routes.
+- docs/api/server-actions.md: Sign-in and auth-handling server actions.
+- docs/api/external-services.md: Third-party integrations (Gemini, Resend, Razorpay, Telegram) and format extraction engines.
+- docs/api/database.md: PostgreSQL tables, vector dimensions, indexes, and initial-to-billing schema migrations.
+- docs/state/client-state.md: Browser local states, custom events, and filter state management.
+- docs/state/server-state.md: Fetch-based state hydration, client cache sync, and optimistic archive mutations.
+- docs/auth/auth-flow.md: Provider setups, JWT callback mapping, and development login bypass.
+- docs/auth/authorization.md: Layout guards, plan limit enforcement, and header token ingest validation.
+- docs/infra/environment.md: Environment schema Zod validation list.
+- docs/infra/deployment.md: Local execution, production builds, and daemon background execution.
+- docs/infra/testing.md: CLI test run scripts, utility coverages, and custom tests map.
+- docs/modules/capture.md: Deep dive into the multi-surface capture engine, action extraction, and limits checking.
+- docs/modules/search-chat-graph.md: Deep dive into semantic search, Gemini RAG, and interactive flow chart canvas.
+- docs/modules/billing-settings.md: Deep dive into plans, settings routing, and webhook-driven subscription sync.
 
 ## Glossary
+- Archive Item: The core unit of knowledge (URL, note, plain text, or file) captured by the user.
+- Ingestion: The entry pipeline that validates, performs command parsing, limits check, and saves the item.
+- Enrichment: The async post-save AI pipeline that scrapes, parses, summarizes, tags, and embeds the item.
+- RAG: Retrieval-Augmented Generation, used to answer queries in the chat panel based on the semantic search of context items.
+- Item Relation: AI-inferred similarities (embedding cosine distance) or manual links between captured items.
 
-- **Item:** The fundamental unit of data in Recally. An item can be a note, a file, a bookmark, or any piece of information captured by the user.
-- **Capture:** The process of creating a new Item. This can be done through the main UI (`CaptureBar.tsx`), email, Telegram, or other integrations.
-- **Ingestion:** The backend process that receives captured data, parses it, and creates a new Item in the database. Governed by `app/api/ingest/route.ts`.
-- **Enrichment:** An asynchronous background process (`workers/enrichment-worker.ts`) that uses AI (Google Gemini) to analyze an Item's content, generate a title, summary, and embeddings for vector search.
-- **Graph:** The network of all Items, visualized as a 2D force-directed graph in `components/KnowledgeMap.tsx`. Relationships between items are stored in the database.
-- **Collection:** A user-curated group of Items.
+## Recent Changes
+- [2026-05-18] Split authentication into dedicated login, signup, forgot-password, and reset-password pages with local password reset tokens.
+- [2026-05-17] Switched UI to dark-first default, added quick-capture to shell, and added mobile drawer navigation.
+- [2026-05-17] Built hybrid search retrieval page, threaded chat with citation drill-in, and bulk archive/undo actions.
+- [2026-05-17] Standardized settings routing and created initial system documentation.
+
+## Update Triggers
+- When any documentation file is added, removed, or renamed.
+- When there is a major change to the tech stack (e.g. upgrading Next.js version).
+- When a new core feature is introduced that changes the high-level project vision.
+
+## Related Docs
+- [docs/architecture/folder-structure.md](file:///e:/Projects/recallQ/docs/architecture/folder-structure.md) — Renders the codebase layout described in the tech stack.
+
+AGENT NOTE: overview.md is the first file any agent reads. If it drifts from reality, all downstream decisions will be wrong. Update it whenever any doc file is added, removed, or significantly restructured.
+AGENT UPDATE: docs/overview.md

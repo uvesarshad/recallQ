@@ -12,9 +12,11 @@ export const authConfig = {
 
       const isLoggedIn = !!auth?.user;
       const isProtectedAppPath = nextUrl.pathname === "/app" || nextUrl.pathname.startsWith("/app/");
-      const isAppAuthPath = nextUrl.pathname === "/app/login";
+      const isAuthPath = ["/login", "/signup", "/forgot-password", "/reset-password", "/app/login"].includes(
+        nextUrl.pathname,
+      );
 
-      if (isAppAuthPath) {
+      if (isAuthPath) {
         return true;
       }
 
@@ -29,6 +31,6 @@ export const authConfig = {
     strategy: "jwt",
   },
   pages: {
-    signIn: "/app/login",
+    signIn: "/login",
   },
 } satisfies NextAuthConfig;

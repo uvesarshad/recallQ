@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ListPlus, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { FileUp, ListPlus, Sparkles, X } from "lucide-react";
 import ActionPreview, { type ActionOverrideValue, type ActionPreviewValue } from "@/components/ActionPreview";
 import { dispatchArchiveItemCreated, dispatchArchiveItemsChanged } from "@/lib/archive-events";
 
@@ -9,7 +9,15 @@ export function openCreateDialog() {
   window.dispatchEvent(new CustomEvent("recall:create"));
 }
 
-type CaptureMode = "single" | "bulk";
+type CaptureMode = "single" | "bulk" | "file";
+
+const ACCEPTED_FILE_TYPES = ".pdf,.txt,.md,.png,.jpg,.jpeg,.gif,.webp,.docx,.xlsx";
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 type BulkImportItem = {
   type: "url" | "text";
@@ -57,6 +65,10 @@ export default function CreateItemDialog() {
   const [preview, setPreview] = useState<ActionPreviewValue | null>(null);
   const [overrides, setOverrides] = useState<ActionOverrideValue>({});
   const [loading, setLoading] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -105,8 +117,42 @@ export default function CreateItemDialog() {
 
   const bulkItems = parseBulkImport(content);
 
+  function handleFileSelect(file: File) {
+    setFileError(null);
+    setSelectedFile(file);
+  }
+
   async function handleSubmit() {
-    if (!content.trim() || loading) return;
+    if (loading) return;
+
+    if (mode === "file") {
+      if (!selectedFile) return;
+      setLoading(true);
+      try {
+        const fd = new FormData();
+        fd.append("file", selectedFile);
+        const response = await fetch("/api/ingest/file", { method: "POST", body: fd });
+        const data = await response.json();
+        if (!response.ok) {
+          setFileError(data.error === "storage_limit_reached"
+            ? "Storage limit reached. Upgrade your plan to upload more files."
+            : data.error === "unsupported_file_type"
+              ? "That file type is not supported."
+              : data.error === "file_too_large"
+                ? "File exceeds the size limit for your plan."
+                : "Upload failed. Please try again.");
+          return;
+        }
+        setOpen(false);
+        setSelectedFile(null);
+        if (data.id) dispatchArchiveItemCreated(data.id);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (!content.trim()) return;
     setLoading(true);
     try {
       const response = await fetch("/api/ingest", {
@@ -118,9 +164,7 @@ export default function CreateItemDialog() {
             : buildSinglePayload(content, overrides),
         ),
       });
-      if (!response.ok) {
-        throw new Error("Failed to create item");
-      }
+      if (!response.ok) throw new Error("Failed to create item");
       const data = (await response.json()) as { id?: string; count?: number; items?: Array<{ id?: string }> };
       setOpen(false);
       setMode("single");
@@ -153,22 +197,24 @@ export default function CreateItemDialog() {
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby="create-dialog-title"
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-modals border border-border bg-surface shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-text-primary">Create Item</h2>
+            <h2 id="create-dialog-title" className="text-lg font-semibold text-text-primary">Create Item</h2>
             <p className="text-sm text-text-muted">
               {mode === "bulk" ? "Paste one link or note per line to import several items at once." : "One box. Paste anything and describe what should happen."}
             </p>
           </div>
-          <button className="rounded-buttons p-2 text-text-muted hover:bg-surface-2" onClick={() => setOpen(false)}>
+          <button aria-label="Close dialog" className="rounded-buttons p-2 text-text-muted hover:bg-surface-2" onClick={() => { setOpen(false); setSelectedFile(null); setFileError(null); }}>
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="grid gap-4 p-5">
-          <div className="inline-flex w-fit rounded-buttons border border-border bg-bg p-1 text-sm">
+          <div role="group" aria-label="Capture mode" className="inline-flex w-fit rounded-buttons border border-border bg-bg p-1 text-sm">
             <button
+              aria-pressed={mode === "single"}
               className={`rounded-buttons px-3 py-1.5 transition ${mode === "single" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
               onClick={() => setMode("single")}
               type="button"
@@ -176,29 +222,81 @@ export default function CreateItemDialog() {
               Single
             </button>
             <button
+              aria-pressed={mode === "bulk"}
               className={`inline-flex items-center gap-2 rounded-buttons px-3 py-1.5 transition ${mode === "bulk" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
-              onClick={() => {
-                setMode("bulk");
-                setPreview(null);
-                setOverrides({});
-              }}
+              onClick={() => { setMode("bulk"); setPreview(null); setOverrides({}); }}
               type="button"
             >
               <ListPlus className="h-4 w-4" />
               Bulk import
             </button>
+            <button
+              aria-pressed={mode === "file"}
+              className={`inline-flex items-center gap-2 rounded-buttons px-3 py-1.5 transition ${mode === "file" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
+              onClick={() => { setMode("file"); setPreview(null); setOverrides({}); setFileError(null); }}
+              type="button"
+            >
+              <FileUp className="h-4 w-4" />
+              File
+            </button>
           </div>
-          <textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder={
-              mode === "bulk"
-                ? "https://example.com/article\nReview pricing page next week\nhttps://another-site.com/report"
-                : "Paste a link or write a note. Example: https://example.com remind me this on 30 Jan folder: work #design"
-            }
-            rows={9}
-            className="rounded-input border border-border bg-bg px-4 py-3 text-sm text-text-primary outline-none focus:border-brand"
-          />
+          {mode === "file" ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_FILE_TYPES}
+                className="sr-only"
+                aria-label="Select file"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+              />
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Drop a file here or click to browse"
+                onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files[0];
+                  if (f) handleFileSelect(f);
+                }}
+                className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-input border-2 border-dashed px-4 py-10 text-center transition-colors ${
+                  dragOver ? "border-brand bg-brand/5" : "border-border hover:border-brand/50"
+                }`}
+              >
+                <FileUp className={`h-8 w-8 ${dragOver ? "text-brand" : "text-text-muted"}`} />
+                {selectedFile ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-text-primary">{selectedFile.name}</p>
+                    <p className="text-xs text-text-muted">{formatFileSize(selectedFile.size)}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-sm text-text-primary">Drop a file or click to browse</p>
+                    <p className="text-xs text-text-muted">PDF, images, DOCX, XLSX, plain text, Markdown</p>
+                  </div>
+                )}
+              </div>
+              {fileError && <p className="text-sm text-red-400">{fileError}</p>}
+            </>
+          ) : (
+            <textarea
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              placeholder={
+                mode === "bulk"
+                  ? "https://example.com/article\nReview pricing page next week\nhttps://another-site.com/report"
+                  : "Paste a link or write a note. Example: https://example.com remind me this on 30 Jan folder: work #design"
+              }
+              aria-label={mode === "bulk" ? "Items to import, one per line" : "Capture content"}
+              rows={9}
+              className="rounded-input border border-border bg-bg px-4 py-3 text-sm text-text-primary outline-none focus:border-brand"
+            />
+          )}
           {mode === "single" ? (
             <>
               <div className="rounded-cards border border-brand/20 bg-brand/5 p-4 text-sm text-text-mid">
@@ -228,11 +326,15 @@ export default function CreateItemDialog() {
               Cancel
             </button>
             <button
-              disabled={loading || !content.trim()}
+              disabled={loading || (mode === "file" ? !selectedFile : !content.trim())}
               className="rounded-buttons bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               onClick={handleSubmit}
             >
-              {loading ? (mode === "bulk" ? "Importing..." : "Saving...") : mode === "bulk" ? `Import ${bulkItems.length || ""}`.trim() : "Save item"}
+              {loading
+                ? mode === "file" ? "Uploading..." : mode === "bulk" ? "Importing..." : "Saving..."
+                : mode === "file" ? "Upload file"
+                : mode === "bulk" ? `Import ${bulkItems.length || ""}`.trim()
+                : "Save item"}
             </button>
           </div>
         </div>

@@ -4,8 +4,36 @@ import PostgresAdapter from "@auth/pg-adapter";
 import { db, poolInstance } from "@/lib/db";
 import { env } from "@/lib/env";
 import Google from "next-auth/providers/google";
-import Resend from "next-auth/providers/resend";
+import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config";
+import { verifyPassword } from "@/lib/password";
+
+function normalizeAuthUrlEnvironment() {
+  if (process.env.AUTH_URL || process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  const configuredUrl = env.NEXTAUTH_URL;
+  if (!configuredUrl) {
+    return;
+  }
+
+  try {
+    const { hostname } = new URL(configuredUrl);
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+
+    if (isLocalHost) {
+      delete process.env.NEXTAUTH_URL;
+      console.warn(
+        "Ignoring local NEXTAUTH_URL in development so Auth.js can use the active dev server port. Set AUTH_URL to force a fixed auth origin.",
+      );
+    }
+  } catch {
+    delete process.env.NEXTAUTH_URL;
+  }
+}
+
+normalizeAuthUrlEnvironment();
 
 // Dev-only mock session
 const devBypass = env.DEV_BYPASS_LOGIN === "true";
@@ -37,41 +65,47 @@ async function ensureDevUser() {
 const nextAuth = NextAuth({
   ...authConfig,
   providers: [
-    Google({
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-    }),
-    Resend({
-      apiKey: env.RESEND_API_KEY,
-      from: env.RESEND_FROM_EMAIL || env.EMAIL_FROM || `Recall <no-reply@${env.APP_DOMAIN || "localhost"}>`,
-      async sendVerificationRequest({ identifier, url, provider }) {
-        if (process.env.NODE_ENV === "development" && !env.RESEND_API_KEY) {
-          console.log("\n--- DEVELOPMENT MAGIC LINK ---");
-          console.log(`To: ${identifier}`);
-          console.log(`URL: ${url}`);
-          console.log("------------------------------\n");
-          return;
-        }
-        
-        // Default Resend behavior if key exists
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${provider.apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: provider.from,
-            to: identifier,
-            subject: `Sign in to Recall`,
-            html: `Click here to sign in: <a href="${url}">${url}</a>`,
-          }),
-        });
+    ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ? [Google({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET })]
+      : []),
+    Credentials({
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const password = String(credentials?.password ?? "");
 
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(`Resend error: ${JSON.stringify(error)}`);
+        if (!email || !password) {
+          return null;
         }
+
+        const result = await db.query<{
+          id: string;
+          name: string | null;
+          email: string;
+          image: string | null;
+          password_hash: string | null;
+        }>(
+          `SELECT id, name, email, image, password_hash
+           FROM users
+           WHERE lower(email) = lower($1)
+           LIMIT 1`,
+          [email],
+        );
+        const user = result.rows[0];
+
+        if (!user || !verifyPassword(password, user.password_hash)) {
+          return null;
+        }
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+        };
       },
     }),
   ],

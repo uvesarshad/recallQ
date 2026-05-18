@@ -2,7 +2,9 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
 
 import { db } from "../lib/db";
+import { logger } from "../lib/logger";
 import { sendTelegramMessage } from "../lib/telegram";
+import { isPushEnabled, sendPushNotification, type PushSubscriptionJSON } from "../lib/push";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -11,13 +13,13 @@ async function sendReminder(reminder: any) {
   const { channels, user_id, item_id } = reminder;
 
   const itemResult = await db.query(
-    "SELECT title, raw_url, raw_text, capture_note, type FROM items WHERE id = $1",
+    "SELECT id, title, raw_url, raw_text, capture_note, type FROM items WHERE id = $1",
     [item_id]
   );
   if (itemResult.rowCount === 0) return;
   const item = itemResult.rows[0];
 
-  const userResult = await db.query("SELECT email, telegram_chat_id FROM users WHERE id = $1", [user_id]);
+  const userResult = await db.query("SELECT email, telegram_chat_id, push_subscription FROM users WHERE id = $1", [user_id]);
   if (userResult.rowCount === 0) return;
   const user = userResult.rows[0];
 
@@ -36,7 +38,7 @@ Link: ${item.raw_url || "N/A"}`;
           subject: subject,
           text: body,
         });
-        console.log(`Sent email reminder to ${user.email} for item ${item.id}`);
+        logger.info("reminder", `Email sent`, { item_id: item.id, email: user.email });
       } else if (channel === 'telegram' && user.telegram_chat_id) {
         const telegramBody = [
           "<b>Reminder</b>",
@@ -44,10 +46,20 @@ Link: ${item.raw_url || "N/A"}`;
           item.raw_url ? escapeHtml(item.raw_url) : null,
         ].filter(Boolean).join("\n");
         await sendTelegramMessage(user.telegram_chat_id, telegramBody);
-        console.log(`Sent Telegram reminder to ${user.telegram_chat_id} for item ${item.id}`);
+        logger.info("reminder", `Telegram sent`, { item_id: item.id });
+      } else if (channel === 'push' && user.push_subscription && isPushEnabled()) {
+        const sub = typeof user.push_subscription === 'string'
+          ? JSON.parse(user.push_subscription)
+          : user.push_subscription as PushSubscriptionJSON;
+        await sendPushNotification(sub, {
+          title: `⏰ Reminder`,
+          body: label,
+          url: item.raw_url ?? undefined,
+        });
+        logger.info("reminder", `Push sent`, { item_id: item.id });
       }
     } catch (err) {
-      console.error(`Failed to send reminder via ${channel} for item ${item.id}:`, err);
+      logger.error("reminder", `Channel failed`, { channel, item_id: item.id, error: String(err) });
     }
   }
 
@@ -68,16 +80,21 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;");
 }
 
+let lastResetMonth = -1;
+
 async function checkMonthlyReset() {
-    const now = new Date();
-    if (now.getUTCDate() === 1 && now.getUTCHours() === 0) {
-        console.log("Running monthly reset of saves_this_month...");
-        await db.query("UPDATE users SET saves_this_month = 0");
-    }
+  const now = new Date();
+  // Only reset on the 1st of the month, and only once per month (guard against
+  // the worker firing every minute during the midnight hour).
+  if (now.getUTCDate() === 1 && now.getUTCHours() === 0 && now.getUTCMonth() !== lastResetMonth) {
+    logger.info("reminder", "Running monthly reset of saves_this_month");
+    await db.query("UPDATE users SET saves_this_month = 0");
+    lastResetMonth = now.getUTCMonth();
+  }
 }
 
 async function startWorker() {
-  console.log("Reminder worker started.");
+  logger.info("reminder", "Reminder worker started");
 
   while (true) {
     try {
@@ -93,7 +110,7 @@ async function startWorker() {
       await checkMonthlyReset();
 
     } catch (err) {
-      console.error("Reminder worker batch failed:", err);
+      logger.error("reminder", "Batch failed", { error: String(err) });
     }
 
     await new Promise((resolve) => setTimeout(resolve, 60000)); // Poll every 60 seconds

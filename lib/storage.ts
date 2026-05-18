@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 
 const BASE_PATH = env.FILES_BASE_PATH;
@@ -29,11 +30,37 @@ function sanitizeFilename(filename: string) {
 export async function saveFile(userId: string, itemId: string, filename: string, buffer: Buffer) {
   const userDir = path.join(BASE_PATH, userId, itemId);
   await fs.mkdir(userDir, { recursive: true });
-  
+
   const filePath = path.join(userDir, sanitizeFilename(filename));
   await fs.writeFile(filePath, buffer);
-  
+
+  await db.query(
+    "UPDATE users SET storage_used_bytes = storage_used_bytes + $1 WHERE id = $2",
+    [buffer.length, userId]
+  );
+
   return filePath;
+}
+
+export async function deleteFile(userId: string, filePath: string) {
+  let size = 0;
+  try {
+    const stat = await fs.stat(filePath);
+    size = stat.size;
+    await fs.rm(filePath, { force: true });
+    const dir = path.dirname(filePath);
+    const entries = await fs.readdir(dir);
+    if (entries.length === 0) await fs.rmdir(dir).catch(() => {});
+  } catch {
+    // File already gone — still decrement if we got the size
+  }
+
+  if (size > 0) {
+    await db.query(
+      "UPDATE users SET storage_used_bytes = GREATEST(0, storage_used_bytes - $1) WHERE id = $2",
+      [size, userId]
+    );
+  }
 }
 
 export async function getFileBuffer(filePath: string) {

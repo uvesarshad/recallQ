@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import BillingSettingsClient from "./billing-settings-client";
 
 export default function BillingPage() {
-  redirect("/app/settings/billing");
+  return <BillingSettingsClient />;
 }

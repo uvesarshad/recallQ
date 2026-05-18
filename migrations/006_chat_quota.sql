@@ -1,0 +1,3 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS chat_queries_today INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS chat_queries_reset_date DATE;
