@@ -1,5 +1,5 @@
-import KnowledgeMap from "@/components/KnowledgeMap";
+import CanvasClient from "./canvas-client";
 
 export default function AppCanvasPage() {
-  return <KnowledgeMap />;
+  return <CanvasClient />;
 }

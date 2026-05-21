@@ -37,7 +37,7 @@ This module covers how users get value out of an existing archive: searching it,
 - Position model: persisted `canvas_x` / `canvas_y` wins. Items without saved coordinates fall into a deterministic 4-column grid by their order in the items array — stable across reloads. As soon as the user drags an item, the new position is `PATCH`ed and the grid fallback no longer applies to it.
 - New-item placement: a listener on `ARCHIVE_ITEM_CREATED_EVENT` computes the current viewport center (using `useReactFlow().getViewport()`) and immediately persists those coordinates against the new item — so links captured from PWA / Telegram / extension / mobile land where the user is currently looking on the canvas.
 - Floating dock (bottom-right): Capture button (`openCreateDialog`), Fit-to-viewport (`fitView`), Refresh. Visible only when there are items so the empty state owns the screen on first load.
-- `react-force-graph-2d` is no longer imported by anything in `apps/web/` and is a candidate for removal in Stage 6 (bundle audit).
+- Stage 6 bundle audit: `react-force-graph-2d` and its 24 transitive deps were removed from `apps/web/package.json`. `@xyflow/react` is now lazy-loaded via `next/dynamic` from `apps/web/app/(app)/app/canvas/canvas-client.tsx` (a thin "use client" wrapper around the server-side `page.tsx`), so its ~70KB JS + CSS bundle is only fetched when the user actually opens `/app/canvas` — Feed, Chat, Settings, and auth pages no longer pay the cost.
 
 ## Security Constraints
 - AGENT AVOID: Never query items globally in search or chat. Every SQL statement, including vector queries, must filter by the authenticated user ID. The shared helpers in `apps/web/lib/search.ts` already do this; do not introduce alternates.

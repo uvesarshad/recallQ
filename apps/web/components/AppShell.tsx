@@ -143,7 +143,13 @@ export default function AppShell({
       <aside className={`hidden h-full shrink-0 flex-col border-r border-border bg-surface transition-all md:flex ${collapsed ? "w-20" : "w-[17rem]"}`}>
         <div className="flex items-center justify-between px-4 py-5">
           {!collapsed ? <span className="text-xl font-semibold tracking-tight">Recall</span> : <span className="mx-auto text-lg font-semibold">R</span>}
-          <button className="rounded-buttons p-2 text-text-muted hover:bg-surface-2" onClick={() => setCollapsed((value) => !value)}>
+          <button
+            type="button"
+            className="rounded-buttons p-2 text-text-muted hover:bg-surface-2"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+          >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
         </div>

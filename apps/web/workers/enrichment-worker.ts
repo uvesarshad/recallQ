@@ -7,6 +7,7 @@ import mammoth from "mammoth";
 const pdf = require("pdf-parse");
 import * as xlsx from "xlsx";
 
+import { computeBlurDataUrl } from "../lib/blur";
 import { db } from "../lib/db";
 import { embedText, sanitizeForPrompt } from "../lib/gemini";
 import { generateText } from "../lib/llm";
@@ -236,6 +237,10 @@ Today's date: ${new Date().toISOString()}. Default time: 09:00 IST.`;
     const vectorEnabled = await hasVectorSupport();
     const embedding = vectorEnabled ? await embedText(embeddingInput) : null;
 
+    // Tiny base64 placeholder so the feed renders item thumbnails without
+    // CLS while the real image loads. Computed best-effort; null is fine.
+    const blurDataUrl = imageUrl ? await computeBlurDataUrl(imageUrl) : null;
+
     if (vectorEnabled) {
       await db.query(
         `UPDATE items
@@ -243,12 +248,13 @@ Today's date: ${new Date().toISOString()}. Default time: 09:00 IST.`;
              summary = $2,
              tags = $3,
              image_url = COALESCE($4, image_url),
+             blur_data_url = COALESCE($5, blur_data_url),
              enriched = true,
              enriched_at = NOW(),
              updated_at = NOW(),
-             embedding = $5::vector
-         WHERE id = $6`,
-        [title, summary, tags, imageUrl, embedding ? JSON.stringify(embedding) : null, item.id],
+             embedding = $6::vector
+         WHERE id = $7`,
+        [title, summary, tags, imageUrl, blurDataUrl, embedding ? JSON.stringify(embedding) : null, item.id],
       );
     } else {
       await db.query(
@@ -257,11 +263,12 @@ Today's date: ${new Date().toISOString()}. Default time: 09:00 IST.`;
              summary = $2,
              tags = $3,
              image_url = COALESCE($4, image_url),
+             blur_data_url = COALESCE($5, blur_data_url),
              enriched = true,
              enriched_at = NOW(),
              updated_at = NOW()
-         WHERE id = $5`,
-        [title, summary, tags, imageUrl, item.id],
+         WHERE id = $6`,
+        [title, summary, tags, imageUrl, blurDataUrl, item.id],
       );
     }
 

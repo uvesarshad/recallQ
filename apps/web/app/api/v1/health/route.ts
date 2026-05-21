@@ -50,6 +50,14 @@ export async function GET(): Promise<Response> {
       workers: { enrichment, reminders },
       ts: new Date().toISOString(),
     },
-    { status: ok ? 200 : 503 },
+    {
+      status: ok ? 200 : 503,
+      headers: {
+        // Tiny edge cache so uptime probes hitting once per minute don't
+        // spam the DB. SWR keeps a healthy response visible briefly while
+        // the next probe is in flight.
+        "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30",
+      },
+    },
   );
 }

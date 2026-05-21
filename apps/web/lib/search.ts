@@ -54,7 +54,7 @@ export async function runExactSearch(userId: string, query: string): Promise<Sea
     const result = await db.query<SearchItem>(
       `SELECT id, type, title, summary, tags, source, created_at, updated_at,
               raw_url, raw_text, collection_id, canvas_x, canvas_y, canvas_pinned,
-              enriched, reminder_at, reminder_sent, file_name, file_mime_type, image_url,
+              enriched, reminder_at, reminder_sent, file_name, file_mime_type, image_url, blur_data_url,
               ts_rank(tsv, websearch_to_tsquery('english', $1)) AS rank
        FROM items
        WHERE user_id = $2
@@ -70,7 +70,7 @@ export async function runExactSearch(userId: string, query: string): Promise<Sea
     const result = await db.query<SearchItem>(
       `SELECT id, type, title, summary, tags, source, created_at, updated_at,
               raw_url, raw_text, collection_id, canvas_x, canvas_y, canvas_pinned,
-              enriched, reminder_at, reminder_sent, file_name, file_mime_type, image_url
+              enriched, reminder_at, reminder_sent, file_name, file_mime_type, image_url, blur_data_url
        FROM items
        WHERE user_id = $1
          AND (
@@ -102,7 +102,7 @@ export async function runSemanticSearch(userId: string, query: string): Promise<
     const semanticResult = await db.query<SearchItem>(
       `SELECT id, type, title, summary, tags, source, created_at, updated_at,
               raw_url, raw_text, collection_id, canvas_x, canvas_y, canvas_pinned,
-              enriched, reminder_at, reminder_sent, file_name, file_mime_type, image_url,
+              enriched, reminder_at, reminder_sent, file_name, file_mime_type, image_url, blur_data_url,
               1 - (embedding <=> $1::vector) as similarity
        FROM items
        WHERE user_id = $2 AND embedding IS NOT NULL

@@ -46,6 +46,7 @@ Migrations are located inside the migrations directory and are executed sequenti
 - 011_personal_access_tokens.sql: Creates personal_access_tokens and partial indexes for bearer-token auth from the Chrome extension and the mobile apps. Web continues to use NextAuth session cookies.
 - 012_worker_heartbeats.sql: Creates worker_heartbeats so /api/v1/health can report whether the enrichment and reminders daemons are alive.
 - 013_rate_limits.sql: Creates rate_limits for the Postgres-backed token-bucket-ish rate limiter introduced in Stage 5 — no Redis required.
+- 014_item_blur.sql: Adds items.blur_data_url (TEXT). Tiny base64 JPEG (~200-400 bytes) populated during enrichment by apps/web/lib/blur.ts via sharp; consumed by the ItemCard's next/image placeholder to prevent CLS.
 
 ## Update Triggers
 - When a database migration file (.sql) is added, removed, or modified.

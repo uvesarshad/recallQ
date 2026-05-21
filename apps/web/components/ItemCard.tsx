@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Bell, CheckSquare2, File, FileText, Link2, MessageSquare, Square, StickyNote, Trash2 } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import ItemDetailModal from "@/components/ItemDetailModal";
 import { resolvePreviewImageUrl } from "@/lib/item-preview";
@@ -114,11 +115,23 @@ export default function ItemCard({
           </button>
         ) : null}
 
-        {/* Preview image */}
+        {/* Preview image. `unoptimized` because scraped URLs aren't on our
+            remotePatterns allow-list; the blur placeholder (computed by the
+            enrichment worker via sharp) still prevents CLS even without
+            Next.js's image pipeline. */}
         {previewImageUrl ? (
-          <div className="mb-3 aspect-[1.91/1] overflow-hidden rounded-md">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={previewImageUrl} alt={item.title || "Preview"} className="h-full w-full object-cover" />
+          <div className="relative mb-3 aspect-[1.91/1] overflow-hidden rounded-md">
+            <Image
+              src={previewImageUrl}
+              alt={item.title || "Preview"}
+              fill
+              sizes="(min-width: 768px) 50vw, 100vw"
+              className="object-cover"
+              unoptimized
+              {...(item.blur_data_url
+                ? { placeholder: "blur" as const, blurDataURL: item.blur_data_url }
+                : {})}
+            />
           </div>
         ) : null}
 
@@ -201,6 +214,7 @@ export default function ItemCard({
               <button
                 onClick={(e) => { e.stopPropagation(); void deleteItem(); }}
                 className="flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] text-text-muted hover:bg-surface-2 hover:text-rose-400"
+                aria-label="Delete item"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

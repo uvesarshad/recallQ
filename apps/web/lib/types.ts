@@ -25,6 +25,7 @@ export interface ArchiveItem {
   file_mime_type?: string | null;
   capture_note?: string | null;
   image_url?: string | null;
+  blur_data_url?: string | null;
   snippet?: string | null;
   similarity?: number;
 }

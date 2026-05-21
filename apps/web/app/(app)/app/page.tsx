@@ -32,7 +32,8 @@ async function getItems(userId: string) {
             items.reminder_sent,
             items.file_name,
             items.file_mime_type,
-            items.image_url
+            items.image_url,
+            items.blur_data_url
      FROM items
      LEFT JOIN collections ON collections.id = items.collection_id
      WHERE items.user_id = $1
