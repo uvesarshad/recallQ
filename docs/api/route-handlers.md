@@ -19,7 +19,7 @@ All application routes live under `/api/v1/*`. Paths below are shown without the
 ### Authentication Endpoints
 
 - `/api/auth/[...nextauth]`: NextAuth v5 catch-all. Standard endpoints for sign-in, callback, sign-out, session, CSRF. Kept at the standard `/api/auth/` path (not under v1) per NextAuth convention; OAuth provider redirect URIs depend on it.
-- `/auth/tokens [POST]`: Exchange `{ email, password, device_name }` for a personal access token. Returns `{ token, id, prefix, device_name, created_at }` once; the raw `token` is never returned again. Used by the Chrome extension and the mobile apps. Validates input via `TokenIssueInputSchema` from `@recall/api-schema`. **TODO (stage 5):** rate-limit to 5/IP/15min.
+- `/auth/tokens [POST]`: Exchange `{ email, password, device_name }` for a personal access token. Returns `{ token, id, prefix, device_name, created_at }` once; the raw `token` is never returned again. Used by the Chrome extension and the mobile apps. Validates input via `TokenIssueInputSchema` from `@recall/api-schema`. **Rate limited** (Stage 5): 5 attempts/IP/15min plus 10/email/hour. See `docs/security-audit.md`.
 - `/auth/tokens [GET]`: Lists the current user's active tokens. Session cookie only (not callable with a bearer token, to prevent stolen-token reconnaissance). Returns `{ tokens: TokenSummary[] }` (no raw values, just metadata).
 - `/auth/tokens/[id] [DELETE]`: Revokes a single token. Session cookie only, same rationale.
 

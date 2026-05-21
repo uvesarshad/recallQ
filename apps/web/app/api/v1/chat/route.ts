@@ -1,6 +1,7 @@
 import { streamArchiveAnswer } from "@/lib/archive-chat";
 import { db } from "@/lib/db";
 import { getChatQueryLimit } from "@/lib/plan-limits";
+import { rateLimit } from "@/lib/rate-limit";
 import { requireSessionUser } from "@/lib/request-auth";
 import type { ChatMessagePayload } from "@/lib/types";
 
@@ -10,6 +11,27 @@ export async function POST(req: Request) {
   const user = await requireSessionUser();
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  // Hourly burst limit sits on top of the per-day plan quota below. The plan
+  // quota caps total Gemini cost per user per day; this caps how fast a
+  // stolen session can run through it.
+  const burst = await rateLimit({
+    key: `chat:user:${user.id}`,
+    limit: 30,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!burst.allowed) {
+    return new Response(
+      JSON.stringify({ error: "rate_limited", code: "rate_limited" }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": Math.ceil(burst.retryAfterMs / 1000).toString(),
+        },
+      },
+    );
   }
 
   // Enforce per-day chat query limit atomically.

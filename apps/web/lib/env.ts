@@ -59,6 +59,38 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration: ${issues}`);
 }
 
+// Production-only hardening. Done after Zod parsing so the messages are about
+// runtime requirements rather than schema mismatches. Skipped during
+// `next build` (which sets NODE_ENV=production but doesn't actually run the
+// server) because the build machine doesn't need real production secrets.
+const IS_BUILD_PHASE =
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  process.env.NEXT_PHASE === "phase-export";
+
+if (parsed.data.NODE_ENV === "production" && !IS_BUILD_PHASE) {
+  // NextAuth's signing secret must be long enough to resist offline brute
+  // force. 32 random bytes (Base64 ~ 44 chars) is the documented minimum.
+  // Any production install booting with a dev fallback like "secret" or
+  // "changeme" would fail this check and refuse to start.
+  if (parsed.data.AUTH_SECRET.length < 32) {
+    throw new Error(
+      "AUTH_SECRET is too short for production. Generate a fresh secret with `openssl rand -base64 32` and set it via the systemd EnvironmentFile.",
+    );
+  }
+  // DATABASE_URL must point at a non-localhost host in production (with the
+  // explicit `SELF_HOSTED=true` opt-out for installs that genuinely run the
+  // database on the same EC2 box as the web tier — that's our CloudPanel
+  // setup per PLAN.md Stage 10).
+  if (
+    parsed.data.SELF_HOSTED !== "true" &&
+    /\b(localhost|127\.0\.0\.1)\b/.test(parsed.data.DATABASE_URL)
+  ) {
+    throw new Error(
+      "DATABASE_URL points at localhost but SELF_HOSTED is not set. Either set SELF_HOSTED=true (single-server CloudPanel deploy) or point at the real database host.",
+    );
+  }
+}
+
 export const env = parsed.data;
 
 export function requireEnv<K extends keyof typeof env>(key: K) {

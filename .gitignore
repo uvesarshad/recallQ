@@ -35,9 +35,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# local env files
+# env files — block all by default and explicitly un-ignore .env.example below.
+# Next.js conventionally allows .env.production / .env.development to be
+# committed for non-secret defaults, but ours all carry secrets (DATABASE_URL
+# with password, AUTH_SECRET, RESEND_API_KEY, etc.), so we keep them out.
 .env
-.env*.local
+.env.*
+!.env.example
 
 # vercel
 .vercel

@@ -1,5 +1,6 @@
 import { apiError, apiOk } from "@/lib/api";
 import { ingestItem } from "@/lib/ingest";
+import { rateLimit } from "@/lib/rate-limit";
 import { requireIngestUser } from "@/lib/request-auth";
 import { actionOverrideSchema, bulkIngestPayloadSchema, ingestPayloadSchema } from "@/lib/validation";
 import { z } from "zod";
@@ -18,6 +19,18 @@ export async function POST(req: Request) {
   const user = await requireIngestUser(req);
   if (!user) {
     return apiError("Unauthorized", 401);
+  }
+
+  // Burst limit so a runaway Telegram bot or browser extension can't slam
+  // ingest with hundreds of requests per second. Per-user (not per-IP)
+  // because internal-token captures (Telegram, email) share an IP.
+  const burst = await rateLimit({
+    key: `ingest:user:${user.id}`,
+    limit: 60,
+    windowMs: 60 * 1000,
+  });
+  if (!burst.allowed) {
+    return apiError("Too many captures in a short window. Slow down.", 429);
   }
 
   const rawBody = await req.json();

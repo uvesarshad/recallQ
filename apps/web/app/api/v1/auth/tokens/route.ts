@@ -7,16 +7,47 @@ import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
 import { generateToken } from "@/lib/auth-tokens";
 import { fail, ok, parseBody } from "@/lib/api-response";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { requireSessionUser } from "@/lib/request-auth";
 
 // POST /api/v1/auth/tokens — exchange email + password for a personal access
 // token used by the Chrome extension and the mobile apps. The raw token is
 // only ever returned here; clients must persist it immediately.
 export async function POST(req: Request): Promise<Response> {
+  // IP throttle protects against generic brute force / credential stuffing.
+  const ip = getClientIp(req);
+  const ipLimit = await rateLimit({
+    key: `auth-tokens:ip:${ip}`,
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!ipLimit.allowed) {
+    return fail(
+      "rate_limited",
+      "Too many sign-in attempts from this network. Try again in a few minutes.",
+      429,
+    );
+  }
+
   const body = await parseBody(req, TokenIssueInputSchema);
   if (!body.ok) return body.response;
 
   const { email, password, device_name } = body.data;
+
+  // Account-scoped throttle protects against targeted password guessing even
+  // when the attacker rotates IPs.
+  const emailLimit = await rateLimit({
+    key: `auth-tokens:email:${email.toLowerCase()}`,
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!emailLimit.allowed) {
+    return fail(
+      "rate_limited",
+      "Too many sign-in attempts for this account. Try again later.",
+      429,
+    );
+  }
 
   const userRes = await db.query<{ id: string; password_hash: string | null }>(
     `SELECT id, password_hash FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,

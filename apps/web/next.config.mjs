@@ -30,6 +30,54 @@ const LEGACY_API_DIRS = [
   "user",
 ].join("|");
 
+const IS_PROD = process.env.NODE_ENV === "production";
+
+// Content-Security-Policy. Starts in Report-Only mode so we can observe real
+// production traffic before enforcing — flip the header name to
+// `Content-Security-Policy` (without the `-Report-Only` suffix) once the
+// reports stop showing legitimate failures.
+//
+// Sources included:
+//   - 'self' for first-party scripts / styles / images / connects
+//   - https://checkout.razorpay.com + https://api.razorpay.com for billing
+//   - https://generativelanguage.googleapis.com for the in-browser Gemini SDK
+//     paths (server-side calls don't use the browser CSP)
+//   - data: + https: for images so item thumbnails from arbitrary scrapes
+//     render. Tighten to a remotePatterns whitelist in Stage 6 if needed.
+//   - 'unsafe-inline' on script-src is temporary for the Razorpay checkout
+//     shim; planned migration to a nonce-based policy is tracked in
+//     docs/security-audit.md.
+const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
+  "connect-src 'self' https://api.razorpay.com https://generativelanguage.googleapis.com",
+  "img-src 'self' data: https:",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "frame-src https://api.razorpay.com https://checkout.razorpay.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+// Headers applied to every response. The CSP is report-only in production;
+// the other headers are enforced everywhere because they're behaviorally safe.
+const SECURITY_HEADERS = [
+  // 2-year HSTS preload (only meaningful behind HTTPS; CloudPanel handles the
+  // TLS termination, so this is safe even during local HTTP dev — browsers
+  // ignore HSTS over plain HTTP).
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
+  {
+    key: IS_PROD ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy-Report-Only",
+    value: CSP_POLICY,
+  },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -39,6 +87,14 @@ const nextConfig = {
   },
   turbopack: {
     root: path.join(__dirname, "..", ".."),
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: SECURITY_HEADERS,
+      },
+    ];
   },
   async rewrites() {
     return {
