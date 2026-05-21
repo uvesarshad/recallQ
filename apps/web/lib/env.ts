@@ -40,6 +40,7 @@ const envSchema = z.object({
   VAPID_SUBJECT: z.string().min(1).optional(),
   NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   DEV_BYPASS_LOGIN: z.enum(["true", "false"]).optional(),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
 });
 
 const envData = Object.fromEntries(

@@ -3,7 +3,7 @@
 > Scope: Lists and describes all environment variables used by the Recall application, their visibility, validation, and consuming modules.
 > Rendering context: Isomorphic
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-05-22
 
 ## Overview
 Recall utilizes a Zod validation schema inside lib/env.ts to enforce exact types, defaults, and optional flags for all environment variables at startup. If any required variable is missing or formatted incorrectly in the local environment, the application throws a configuration error on boot.
@@ -39,6 +39,7 @@ Recall utilizes a Zod validation schema inside lib/env.ts to enforce exact types
 - RAZORPAY_PLAN_STARTER_YEARLY_ID: Server-side Razorpay subscription plan identifier for the Starter plan. Optional.
 - RAZORPAY_PLAN_PRO_YEARLY_ID: Server-side Razorpay subscription plan identifier for the Pro plan. Optional.
 - DEV_BYPASS_LOGIN: Server-side development flag. Accepts: true or false. When true, bypasses NextAuth and creates a mock developer session automatically. Optional.
+- LOG_LEVEL: Threshold for `apps/web/lib/logger.ts`. Accepts: debug, info, warn, error. Defaults to `info` in production and `debug` everywhere else. Affects web routes, workers, and any module that imports the shared logger. Optional.
 
 ## Security Constraints
 - AGENT AVOID: Never expose secret keys to the browser. Only NEXT_PUBLIC_RAZORPAY_KEY_ID is public-safe. All other secrets are strictly server-side.
@@ -54,5 +55,5 @@ Recall utilizes a Zod validation schema inside lib/env.ts to enforce exact types
 - [docs/auth/auth-flow.md](file:///e:/Projects/recallQ/docs/auth/auth-flow.md) — Uses client and auth keys.
 - [docs/modules/billing-settings.md](file:///e:/Projects/recallQ/docs/modules/billing-settings.md) — Uses Razorpay keys.
 
-AGENT OWNER: lib/env.ts
+AGENT OWNER: apps/web/lib/env.ts
 AGENT UPDATE: docs/infra/environment.md

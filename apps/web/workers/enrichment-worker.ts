@@ -13,6 +13,7 @@ import { generateText } from "../lib/llm";
 import { logger } from "../lib/logger";
 import { clampStrength, getHostname, orderRelationPair } from "../lib/relations";
 import { hasVectorSupport } from "../lib/vector";
+import { installCrashHandlers, startHeartbeat } from "../lib/worker-heartbeat";
 
 
 function resolveUrl(candidate: string | undefined, baseUrl: string) {
@@ -287,7 +288,9 @@ Today's date: ${new Date().toISOString()}. Default time: 09:00 IST.`;
 }
 
 async function startWorker() {
-  logger.info("enrich", "Enrichment worker started");
+  installCrashHandlers("enrich");
+  startHeartbeat("enrichment");
+  logger.info("enrich", "Enrichment worker started", { pid: process.pid });
 
   while (true) {
     try {

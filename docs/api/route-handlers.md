@@ -23,6 +23,10 @@ All application routes live under `/api/v1/*`. Paths below are shown without the
 - `/auth/tokens [GET]`: Lists the current user's active tokens. Session cookie only (not callable with a bearer token, to prevent stolen-token reconnaissance). Returns `{ tokens: TokenSummary[] }` (no raw values, just metadata).
 - `/auth/tokens/[id] [DELETE]`: Revokes a single token. Session cookie only, same rationale.
 
+### Health Endpoint
+
+- `/health [GET]`: Liveness check intended for CloudPanel monitoring, uptime probes, and load-balancer health pings. No auth, no rate limit, no logging on success. Pings the database and reads from `worker_heartbeats` (see [docs/api/database.md](file:///e:/Projects/recallQ/docs/api/database.md)). Returns `200 { ok: true, db: "up", workers: { enrichment, reminders } }` when healthy, `503` otherwise. A worker with a heartbeat older than 5 minutes is reported as `down` even though the row exists.
+
 ### Ingestion and Capture Endpoints
 
 - `/ingest [POST]`: Gateway for manual captures and extension saves. Accepts a JSON body containing type (url, text, file, note), source, raw text or URL, optional files, and overrides. Authenticates via session or x-internal-ingest-token. Returns an ingestion success object with item ID and a pending enrichment status.

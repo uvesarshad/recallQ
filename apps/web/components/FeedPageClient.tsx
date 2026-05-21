@@ -12,8 +12,10 @@ import {
   Layers3,
   Link2,
   Rows2,
+  Search,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ItemCard from "@/components/ItemCard";
@@ -65,11 +67,13 @@ export default function FeedPageClient({
   folders,
   initialHasMore,
   initialNextCursor,
+  searchQuery = "",
 }: {
   initialItems: FeedItem[];
   folders: Folder[];
   initialHasMore: boolean;
   initialNextCursor: string | null;
+  searchQuery?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -189,7 +193,10 @@ export default function FeedPageClient({
 
   async function reloadItems() {
     setSurfaceError(null);
-    const response = await fetch("/api/items?limit=50");
+    const url = searchQuery
+      ? `/api/search?q=${encodeURIComponent(searchQuery)}`
+      : "/api/items?limit=50";
+    const response = await fetch(url);
     if (!response.ok) {
       setSurfaceError("The archive could not be refreshed right now.");
       return;
@@ -543,7 +550,25 @@ export default function FeedPageClient({
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-8">
-      <h1 className="mb-4 text-xl font-semibold text-text-primary">Your archive</h1>
+      {searchQuery ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <h1 className="text-xl font-semibold text-text-primary">Search results</h1>
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-sm">
+            <Search className="h-3.5 w-3.5 text-brand" />
+            <span className="text-text-primary">&ldquo;{searchQuery}&rdquo;</span>
+            <button
+              type="button"
+              onClick={() => router.push("/app")}
+              className="rounded-full p-0.5 text-brand hover:bg-brand/20"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        </div>
+      ) : (
+        <h1 className="mb-4 text-xl font-semibold text-text-primary">Your archive</h1>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {presetOptions.map(({ label, value, icon: Icon }) => {

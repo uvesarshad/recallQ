@@ -21,6 +21,7 @@ Recall utilizes a local, system-installed PostgreSQL database as its primary per
 - item_comments: Threaded notes. Stores comment UUID, item UUID, user UUID, body text, and timestamps.
 - reminders: Reminders queue. Stores reminder UUID, item UUID, user UUID, remind_at timestamp, dispatch channels (text array: email, telegram, push), and sent flags.
 - personal_access_tokens: Bearer tokens for non-web clients (Chrome extension, iOS/Android). Columns: id (UUID), user_id (UUID FK → users.id), device_name (TEXT), token_hash (SHA-256 base64url of the raw token, unique), prefix (first 8 chars of the raw token's random portion, shown in UI), scopes (TEXT[], defaults to {full}), last_used_at (TIMESTAMPTZ), created_at, revoked_at. The raw token is only returned at issue time and cannot be recovered. Consulted by lib/request-auth.ts on every request that carries an `Authorization: Bearer …` header.
+- worker_heartbeats: Liveness tracking for the background workers. Columns: worker_name (TEXT primary key — `enrichment` or `reminders`), last_heartbeat_at (TIMESTAMPTZ, defaults to now()), pid (INTEGER), hostname (TEXT). Each worker upserts its row every 30 seconds via apps/web/lib/worker-heartbeat.ts. The /api/v1/health endpoint reports a worker as `down` when its heartbeat is older than 5 minutes.
 
 ## Database Indexes
 - GIN Index: idx_items_tags is a generalized inverted index placed on the items tags array column to accelerate tag searches.
@@ -42,6 +43,7 @@ Migrations are located inside the migrations directory and are executed sequenti
 - 009_password_auth.sql: Adds users.password_hash for local email/password authentication.
 - 010_password_reset_tokens.sql: Creates password_reset_tokens and indexes for local email/password reset links.
 - 011_personal_access_tokens.sql: Creates personal_access_tokens and partial indexes for bearer-token auth from the Chrome extension and the mobile apps. Web continues to use NextAuth session cookies.
+- 012_worker_heartbeats.sql: Creates worker_heartbeats so /api/v1/health can report whether the enrichment and reminders daemons are alive.
 
 ## Update Triggers
 - When a database migration file (.sql) is added, removed, or modified.

@@ -16,7 +16,8 @@
       "Bash(pnpm typecheck *)",
       "Bash(pnpm lint *)",
       "Bash(pnpm test *)",
-      "Bash(pnpm build *)"
+      "Bash(pnpm build *)",
+      "Bash(git rm *)"
     ]
   }
 }

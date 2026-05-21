@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import FeedPageClient from "@/components/FeedPageClient";
 import OnboardingBanner from "@/components/OnboardingBanner";
+import { MAX_QUERY_LENGTH, runSearch } from "@/lib/search";
 import type { ArchiveItem, CollectionRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +62,7 @@ async function getFolders(userId: string) {
 export default async function AppFeedPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ saved?: string; error?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; q?: string }>;
 }) {
   let session;
   try {
@@ -75,6 +76,12 @@ export default async function AppFeedPage({
     redirect("/login");
   }
 
+  const params = await searchParams;
+  const saved = params?.saved === "true";
+  const error = params?.error;
+  const rawQuery = (params?.q || "").trim();
+  const searchQuery = rawQuery.length > 0 && rawQuery.length <= MAX_QUERY_LENGTH ? rawQuery : "";
+
   let items: ArchiveItem[] = [];
   let folders: CollectionRecord[] = [];
   let hasMore = false;
@@ -82,19 +89,22 @@ export default async function AppFeedPage({
   let dbError = false;
 
   try {
-    const itemsResult = await getItems(session.user.id);
-    items = itemsResult.items;
-    hasMore = itemsResult.hasMore;
-    nextCursor = itemsResult.nextCursor;
+    if (searchQuery) {
+      const result = await runSearch(session.user.id, searchQuery, "hybrid");
+      items = result.items;
+      hasMore = false;
+      nextCursor = null;
+    } else {
+      const itemsResult = await getItems(session.user.id);
+      items = itemsResult.items;
+      hasMore = itemsResult.hasMore;
+      nextCursor = itemsResult.nextCursor;
+    }
     folders = await getFolders(session.user.id);
   } catch (err) {
     console.error("Feed page DB error:", err);
     dbError = true;
   }
-
-  const params = await searchParams;
-  const saved = params?.saved === "true";
-  const error = params?.error;
 
   return (
     <div>
@@ -124,9 +134,15 @@ export default async function AppFeedPage({
         </div>
       )}
 
-      {!dbError && items.length === 0 ? (
+      {!dbError && items.length === 0 && !searchQuery ? (
         <>
-          <FeedPageClient initialItems={[]} folders={folders} initialHasMore={false} initialNextCursor={null} />
+          <FeedPageClient
+            initialItems={[]}
+            folders={folders}
+            initialHasMore={false}
+            initialNextCursor={null}
+            searchQuery=""
+          />
           <OnboardingBanner />
         </>
       ) : (
@@ -135,6 +151,7 @@ export default async function AppFeedPage({
           folders={folders}
           initialHasMore={hasMore}
           initialNextCursor={nextCursor}
+          searchQuery={searchQuery}
         />
       )}
     </div>

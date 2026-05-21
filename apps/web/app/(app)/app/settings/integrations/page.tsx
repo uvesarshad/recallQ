@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { isBillingEnabled } from "@/lib/billing";
 import { db } from "@/lib/db";
-import EmailAddressCopy from "../../../settings/integrations/EmailAddressCopy";
+import EmailAddressCopy from "./EmailAddressCopy";
 import SettingsNav from "@/components/SettingsNav";
-import TelegramConnect from "../../../settings/integrations/TelegramConnect";
+import TelegramConnect from "./TelegramConnect";
 import { Mail, Send } from "lucide-react";
 import { redirect } from "next/navigation";
 

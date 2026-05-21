@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useEffect, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -47,10 +47,11 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useStoredState("recall-sidebar-collapsed", false);
   const [storedTheme, setTheme, themeHydrated] = useStoredState<ThemePreference | string>(THEME_STORAGE_KEY, DEFAULT_THEME);
   const theme = isThemePreference(storedTheme) ? storedTheme : DEFAULT_THEME;
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") || "");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,6 +60,13 @@ export default function AppShell({
       setTheme(DEFAULT_THEME);
     }
   }, [setTheme, storedTheme]);
+
+  // Keep the search input in sync with the URL so that clearing the search
+  // pill on the Feed page (which navigates to /app) also clears the input,
+  // and so that landing on /app?q=foo shows "foo" pre-filled.
+  useEffect(() => {
+    setQuery(searchParams.get("q") || "");
+  }, [searchParams]);
 
   useEffect(() => {
     if (!themeHydrated) {
@@ -210,7 +218,7 @@ export default function AppShell({
               className="flex-1"
               onSubmit={(event) => {
                 event.preventDefault();
-                router.push(`/app/search?q=${encodeURIComponent(query)}`);
+                router.push(query.trim() ? `/app?q=${encodeURIComponent(query.trim())}` : "/app");
               }}
             >
               <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3 py-2">

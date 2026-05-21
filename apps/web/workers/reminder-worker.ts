@@ -5,6 +5,7 @@ import { db } from "../lib/db";
 import { logger } from "../lib/logger";
 import { sendTelegramMessage } from "../lib/telegram";
 import { isPushEnabled, sendPushNotification, type PushSubscriptionJSON } from "../lib/push";
+import { installCrashHandlers, startHeartbeat } from "../lib/worker-heartbeat";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -94,7 +95,9 @@ async function checkMonthlyReset() {
 }
 
 async function startWorker() {
-  logger.info("reminder", "Reminder worker started");
+  installCrashHandlers("reminder");
+  startHeartbeat("reminders");
+  logger.info("reminder", "Reminder worker started", { pid: process.pid });
 
   while (true) {
     try {

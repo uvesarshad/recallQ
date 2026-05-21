@@ -54,6 +54,20 @@ const nextConfig = {
       ],
     };
   },
+  // Permanent redirects for routes deleted in Stage 2 of PLAN.md. External
+  // bookmarks, search-engine indexes, and the PWA Web Share Target keep
+  // working; users land on the canonical replacement.
+  async redirects() {
+    return [
+      { source: "/canvas", destination: "/app/canvas", permanent: true },
+      { source: "/graph", destination: "/app/canvas", permanent: true },
+      { source: "/app/graph", destination: "/app/canvas", permanent: true },
+      { source: "/app/search", destination: "/app", permanent: true },
+      { source: "/app/login", destination: "/login", permanent: true },
+      { source: "/settings", destination: "/app/settings/profile", permanent: true },
+      { source: "/settings/:path*", destination: "/app/settings/:path*", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

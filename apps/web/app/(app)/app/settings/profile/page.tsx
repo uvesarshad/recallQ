@@ -1,6 +1,6 @@
 import SettingsNav from "@/components/SettingsNav";
 import { isBillingEnabled } from "@/lib/billing";
-import ProfileSettingsClient from "../../../settings/profile/profile-settings-client";
+import ProfileSettingsClient from "./profile-settings-client";
 
 export const dynamic = "force-dynamic";
 
