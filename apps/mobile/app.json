@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "RecallQ",
+    "slug": "recallq",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "recallq",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f0f11"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.montr.recallq",
+      "associatedDomains": ["applinks:recallq.xyz"]
+    },
+    "android": {
+      "package": "ai.montr.recallq",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#6366f1"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "recallq.xyz", "pathPrefix": "/item" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "SEND",
+          "category": ["DEFAULT"],
+          "data": [{ "mimeType": "text/plain" }]
+        }
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0f0f11",
+          "image": "./assets/splash.png",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

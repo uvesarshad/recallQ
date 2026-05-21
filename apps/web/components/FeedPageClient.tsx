@@ -838,7 +838,26 @@ export default function FeedPageClient({
 
           {filteredItems.length === 0 ? (
             <div className="mt-8 rounded-modals border border-border bg-surface p-8 text-center">
-              <p className="text-sm text-text-mid">No items match the current filters.</p>
+              {searchQuery ? (
+                <>
+                  <Search className="mx-auto h-8 w-8 text-text-muted" />
+                  <p className="mt-3 text-sm font-medium text-text-primary">
+                    No matches for &ldquo;{searchQuery}&rdquo;
+                  </p>
+                  <p className="mt-1 text-xs text-text-muted">
+                    Try fewer words, a different phrase, or clear the search to see your full archive.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/app")}
+                    className="mt-4 rounded-full bg-brand/10 px-4 py-1.5 text-sm text-brand"
+                  >
+                    Clear search
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-text-mid">No items match the current filters.</p>
+              )}
               {activeFiltersCount > 0 ? (
                 <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs text-text-muted">
                   {typeFilter !== "all" && <span className="rounded-full border border-border bg-bg px-2 py-1">Type: {typeFilter}</span>}

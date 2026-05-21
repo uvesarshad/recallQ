@@ -55,6 +55,10 @@ pnpm + Turborepo. Web app at `apps/web/`. Future `apps/extension/` (WXT), `apps/
 - [apps/web/lib/api-response.ts](file:///e:/Projects/recallQ/apps/web/lib/api-response.ts) — `ok` / `fail` / `parseBody`. Every `/api/v1/*` handler returns through these.
 - [packages/api-schema/](file:///e:/Projects/recallQ/packages/api-schema/) — Shared Zod schemas (`ErrorResponse`, `TokenIssueInput`, etc.) consumed by web, future extension, future mobile.
 - [apps/web/next.config.mjs](file:///e:/Projects/recallQ/apps/web/next.config.mjs) — Loads workspace `.env`, sets `turbopack.root`, hosts the legacy `/api/*` → `/api/v1/*` rewrite block.
+- [apps/web/proxy.ts](file:///e:/Projects/recallQ/apps/web/proxy.ts) — Combined middleware: NextAuth gate for `/app/*` + CORS preflight/headers for `/api/v1/*`.
+- [apps/web/app/extension/connect/page.tsx](file:///e:/Projects/recallQ/apps/web/app/extension/connect/page.tsx) — Session-authed token issuance bridge used by the Chrome extension's WebAuth flow.
+- [apps/extension/](file:///e:/Projects/recallQ/apps/extension/) — Chrome extension (WXT). Background context menu in `entrypoints/background.ts`, popup in `entrypoints/popup/`.
+- [packages/api-client/src/index.ts](file:///e:/Projects/recallQ/packages/api-client/src/index.ts) — Typed REST client (`createRecallClient`) for non-web clients.
 - [PLAN.md](file:///e:/Projects/recallQ/PLAN.md) — v1 ecosystem plan (web + extension + mobile). Read before touching anything cross-cutting.
 
 

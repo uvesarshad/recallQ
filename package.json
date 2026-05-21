@@ -5,7 +5,11 @@
   "packageManager": "pnpm@11.1.0",
   "scripts": {
     "dev": "turbo run dev --filter=@recall/web",
+    "dev:ext": "turbo run dev --filter=@recall/extension",
     "build": "turbo run build --filter=@recall/web",
+    "build:ext": "turbo run build --filter=@recall/extension",
+    "build:all": "turbo run build",
+    "zip:ext": "pnpm --filter @recall/extension zip",
     "start": "turbo run start --filter=@recall/web",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
@@ -20,5 +24,11 @@
     "dotenv": "^17.3.1",
     "pg": "latest",
     "turbo": "^2.5.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "~18.3.12",
+      "@types/react-dom": "~18.3.5"
+    }
   }
 }

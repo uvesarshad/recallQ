@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FileUp, ListPlus, Sparkles, X } from "lucide-react";
 import ActionPreview, { type ActionOverrideValue, type ActionPreviewValue } from "@/components/ActionPreview";
 import { dispatchArchiveItemCreated, dispatchArchiveItemsChanged } from "@/lib/archive-events";
+import { useModalA11y } from "@/lib/use-modal-a11y";
 
 export function openCreateDialog() {
   window.dispatchEvent(new CustomEvent("recall:create"));
@@ -183,6 +184,8 @@ export default function CreateItemDialog() {
     }
   }
 
+  const containerRef = useModalA11y(open);
+
   if (!open) return null;
 
   return (
@@ -195,6 +198,7 @@ export default function CreateItemDialog() {
       }}
     >
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-dialog-title"

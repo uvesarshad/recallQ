@@ -5,6 +5,7 @@ import { Calendar, ExternalLink, Link2, MessageSquare, Tag, Trash2, X } from "lu
 import ActionPreview, { type ActionOverrideValue, type ActionPreviewValue } from "@/components/ActionPreview";
 import { dispatchArchiveItemsChanged } from "@/lib/archive-events";
 import { resolvePreviewImageUrl } from "@/lib/item-preview";
+import { useModalA11y } from "@/lib/use-modal-a11y";
 import type { ArchiveComment, ArchiveItem, CollectionRecord } from "@/lib/types";
 
 interface ItemDetailModalProps {
@@ -102,6 +103,8 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, open]);
 
+  const containerRef = useModalA11y(open);
+
   if (!open) return null;
 
   async function handleCommentSubmit() {
@@ -192,6 +195,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
       }}
     >
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="item-detail-title"

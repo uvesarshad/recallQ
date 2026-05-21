@@ -1,7 +1,16 @@
 packages:
   - "apps/*"
   - "packages/*"
+allowBuilds:
+  esbuild: true
+  sharp: true
+  spawn-sync: true
+  unrs-resolver: true
 onlyBuiltDependencies:
   - esbuild
   - sharp
+  - spawn-sync
   - unrs-resolver
+overrides:
+  "@types/react": 18.3.12
+  "@types/react-dom": 18.3.5

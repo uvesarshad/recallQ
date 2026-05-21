@@ -140,6 +140,28 @@ body {
   * {
     @apply border-border-soft;
   }
+
+  /* Sitewide keyboard focus indicator. `focus-visible` (not `focus`) so that
+     mouse clicks on buttons do NOT show the ring, but Tab navigation and
+     keyboard interaction always do. Color comes from --color-brand so it
+     adapts to both dark and light themes. Components that need a different
+     ring (e.g. the search input that draws its own border on focus) can
+     override locally. */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* Form fields tend to already have a focus border; keep the ring tighter
+     so it doesn't double-up on top of the border. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline-offset: 0;
+  }
 }
 
 @layer utilities {

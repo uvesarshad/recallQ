@@ -3,7 +3,7 @@
 > Scope: Documents typography fonts, color system variables, border radiuses, spacing, and styling constraints.
 > Rendering context: Client-side
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-05-22
 
 ## Overview
 Recall is designed around a clean, app-like, dark-first visual aesthetic. Global styles are defined in app/globals.css, utilizing tailwind design classes and vanilla CSS variables loaded on the document element. Browser theme preference is stored under recall-theme, validated through lib/theme.ts, and applied by the root beforeInteractive Script plus hydrated client controls. This layout promotes readability, avoids heavy shadows, and enforces clean high-density text interfaces.
@@ -56,11 +56,17 @@ All color codes are defined inside app/globals.css as custom CSS variables in th
 - Canvas Elements: border-radius of 12px.
 - Spacing Constants: Uses Tailwind's grid scale. Inline gaps use gap-2. Modals and cards implement standard paddings from p-3 (compact) to p-4 (normal) and p-5 (modal interiors).
 
+## Focus and Accessibility
+- All interactive elements receive a sitewide `:focus-visible` outline (Stage 7 of [PLAN.md](file:///e:/Projects/recallQ/PLAN.md)) defined in `apps/web/app/globals.css`. The outline uses `var(--color-brand)` so it adapts to dark and light themes automatically. `:focus` (without `:visible`) is suppressed so mouse clicks don't show the ring; Tab navigation and keyboard interaction always do.
+- Inputs / textareas / selects use `outline-offset: 0` to avoid double-stacking on top of their own border focus styles.
+- Modal dialogs (`apps/web/components/CreateItemDialog.tsx`, `apps/web/components/ItemDetailModal.tsx`) share `apps/web/lib/use-modal-a11y.ts` which handles: body scroll lock while open, auto-focus first focusable element on mount, focus restoration to the trigger on close, and a Tab/Shift+Tab focus trap so keyboard users can't escape into the page behind the backdrop.
+
 ## Styling Constraints
 - AGENT AVOID: Never introduce light-mode backgrounds or override text color schemes with absolute white backgrounds unless explicitly commanded.
 - AGENT NOTE: Always apply semantic accent variables to items based on their type data attribute to maintain visual consistency.
 - AGENT NOTE: Theme preference clients should reuse lib/theme.ts constants and helpers instead of duplicating dark/light/system parsing logic.
 - AGENT NOTE: Client theme controls must not read localStorage during the first render; use useStoredState so server and hydration markup match.
+- AGENT NOTE: New modal dialogs must call `useModalA11y(open)` and spread its returned ref onto the dialog container so focus management is consistent across the app. Don't reinvent focus trapping per modal.
 
 ## Update Triggers
 - When the stylesheet app/globals.css is edited or global Tailwind configuration updates.
@@ -74,5 +80,5 @@ All color codes are defined inside app/globals.css as custom CSS variables in th
 - [docs/ui/component-library.md](file:///e:/Projects/recallQ/docs/ui/component-library.md) — Renders the cards and shells.
 - [docs/ui/layout-system.md](file:///e:/Projects/recallQ/docs/ui/layout-system.md) — Base HTML configuration.
 
-AGENT OWNER: app/globals.css, lib/theme.ts
+AGENT OWNER: apps/web/app/globals.css, apps/web/lib/theme.ts, apps/web/lib/use-modal-a11y.ts
 AGENT UPDATE: docs/ui/theming.md
