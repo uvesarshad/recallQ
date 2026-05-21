@@ -39,14 +39,23 @@ Throughout the /docs files you will find:
 ## Stack summary
 Recall is a Tier 4 SaaS built on Next.js 14, dark-first globals.css themes, raw PostgreSQL (`pg` pool queries), pgvector similarities (`text-embedding-004`), NextAuth v5 (beta), Razorpay billing, Gemini AI integrations (`gemini-2.5-flash-lite`), and dual background daemons.
 
+## Monorepo layout
+pnpm + Turborepo. Web app at `apps/web/`. Future `apps/extension/` (WXT), `apps/mobile/` (Expo), and `packages/*` per PLAN.md. Workers live at `apps/web/workers/`. `migrations/`, `scripts/`, and `docs/` stay at the workspace root. Run scripts from root: `pnpm dev`, `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm worker:enrich`, `pnpm db:migrate`.
+
 ## Key paths
-- [app/(app)/layout.tsx](file:///e:/Projects/recallQ/app/(app)/layout.tsx) — Authenticated layout routing guard.
-- [app/(app)/app/page.tsx](file:///e:/Projects/recallQ/app/(app)/app/page.tsx) — Primary dashboard feed page component.
-- [lib/ingest.ts](file:///e:/Projects/recallQ/lib/ingest.ts) — Multi-channel capture ingestion entry.
-- [lib/db.ts](file:///e:/Projects/recallQ/lib/db.ts) — Direct PostgreSQL database pool connection client.
-- [workers/enrichment-worker.ts](file:///e:/Projects/recallQ/workers/enrichment-worker.ts) — Asynchronous background AI scraper and vector builder daemon.
-- [workers/reminder-worker.ts](file:///e:/Projects/recallQ/workers/reminder-worker.ts) — Continuous polling reminder alert dispatcher.
-- [components/KnowledgeMap.tsx](file:///e:/Projects/recallQ/components/KnowledgeMap.tsx) — 2D force-directed node-edge canvas layout visualizer.
+- [apps/web/app/(app)/layout.tsx](file:///e:/Projects/recallQ/apps/web/app/(app)/layout.tsx) — Authenticated layout routing guard.
+- [apps/web/app/(app)/app/page.tsx](file:///e:/Projects/recallQ/apps/web/app/(app)/app/page.tsx) — Primary dashboard feed page component.
+- [apps/web/lib/ingest.ts](file:///e:/Projects/recallQ/apps/web/lib/ingest.ts) — Multi-channel capture ingestion entry.
+- [apps/web/lib/db.ts](file:///e:/Projects/recallQ/apps/web/lib/db.ts) — Direct PostgreSQL database pool connection client.
+- [apps/web/workers/enrichment-worker.ts](file:///e:/Projects/recallQ/apps/web/workers/enrichment-worker.ts) — Asynchronous background AI scraper and vector builder daemon.
+- [apps/web/workers/reminder-worker.ts](file:///e:/Projects/recallQ/apps/web/workers/reminder-worker.ts) — Continuous polling reminder alert dispatcher.
+- [apps/web/components/KnowledgeMap.tsx](file:///e:/Projects/recallQ/apps/web/components/KnowledgeMap.tsx) — 2D force-directed node-edge canvas layout visualizer.
+- [apps/web/lib/request-auth.ts](file:///e:/Projects/recallQ/apps/web/lib/request-auth.ts) — `requireUser(req)` (session + bearer), `requireSessionUser()` (cookie only), `requireIngestUser(req)` (internal token).
+- [apps/web/lib/auth-tokens.ts](file:///e:/Projects/recallQ/apps/web/lib/auth-tokens.ts) — Personal access token format, generation, and hashing.
+- [apps/web/lib/api-response.ts](file:///e:/Projects/recallQ/apps/web/lib/api-response.ts) — `ok` / `fail` / `parseBody`. Every `/api/v1/*` handler returns through these.
+- [packages/api-schema/](file:///e:/Projects/recallQ/packages/api-schema/) — Shared Zod schemas (`ErrorResponse`, `TokenIssueInput`, etc.) consumed by web, future extension, future mobile.
+- [apps/web/next.config.mjs](file:///e:/Projects/recallQ/apps/web/next.config.mjs) — Loads workspace `.env`, sets `turbopack.root`, hosts the legacy `/api/*` → `/api/v1/*` rewrite block.
+- [PLAN.md](file:///e:/Projects/recallQ/PLAN.md) — v1 ecosystem plan (web + extension + mobile). Read before touching anything cross-cutting.
 
 
 AGENT NOTE: AGENTS.md must stay under 80 lines. It is a bootstrap file,

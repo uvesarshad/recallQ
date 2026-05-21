@@ -3,7 +3,7 @@
 > Scope: Documents relational database schemas, tables, relationships, indexes, pgvector integration, and migration files.
 > Rendering context: Server-side
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-05-22
 
 ## Overview
 Recall utilizes a local, system-installed PostgreSQL database as its primary persistent storage. Database connections are handled through an active pg Pool in lib/db.ts, performing raw SQL query statements. The shared query helper retries once with a fresh pool when a stale development connection reports a closed or terminated connection. The database features 768-dimensional vector embeddings managed via the pgvector extension for high-performance cosine similarity searches.
@@ -20,12 +20,14 @@ Recall utilizes a local, system-installed PostgreSQL database as its primary per
 - item_relations: Similarity graph edges. Stores relation UUID, owner user UUID, item_a_id, item_b_id, relation_type (ai_similar, ai_same_domain, ai_topic, user_linked), connection strength (0.0 to 1.0), and timestamps. Has unique key composite constraints.
 - item_comments: Threaded notes. Stores comment UUID, item UUID, user UUID, body text, and timestamps.
 - reminders: Reminders queue. Stores reminder UUID, item UUID, user UUID, remind_at timestamp, dispatch channels (text array: email, telegram, push), and sent flags.
+- personal_access_tokens: Bearer tokens for non-web clients (Chrome extension, iOS/Android). Columns: id (UUID), user_id (UUID FK → users.id), device_name (TEXT), token_hash (SHA-256 base64url of the raw token, unique), prefix (first 8 chars of the raw token's random portion, shown in UI), scopes (TEXT[], defaults to {full}), last_used_at (TIMESTAMPTZ), created_at, revoked_at. The raw token is only returned at issue time and cannot be recovered. Consulted by lib/request-auth.ts on every request that carries an `Authorization: Bearer …` header.
 
 ## Database Indexes
 - GIN Index: idx_items_tags is a generalized inverted index placed on the items tags array column to accelerate tag searches.
 - Vector Index: idx_items_embedding is an ivfflat index built on the items embedding column using vector_cosine_ops with lists set to 100 to speed up semantic cosine distance searches.
 - Partial Indexes: idx_items_reminder (filters items where reminder_sent is false) and idx_reminders_due (filters reminders where sent is false) limit index sizes to active pending reminders only.
 - Relationships Indexes: Placed on item_relations item_a_id, item_b_id, and item_comments item_id to speed up graph fetches and comment loads.
+- Partial Token Indexes: idx_pat_token_hash (lookup by hash on every bearer-authed request) and idx_pat_user (lists a user's active tokens in Settings → Connected Devices) both filter `WHERE revoked_at IS NULL` to stay tight.
 
 ## Migration Files List
 Migrations are located inside the migrations directory and are executed sequentially by Node.js scripts:
@@ -39,6 +41,7 @@ Migrations are located inside the migrations directory and are executed sequenti
 - 008_push_and_storage_quota.sql: Appends storage quota and file usage columns to users.
 - 009_password_auth.sql: Adds users.password_hash for local email/password authentication.
 - 010_password_reset_tokens.sql: Creates password_reset_tokens and indexes for local email/password reset links.
+- 011_personal_access_tokens.sql: Creates personal_access_tokens and partial indexes for bearer-token auth from the Chrome extension and the mobile apps. Web continues to use NextAuth session cookies.
 
 ## Update Triggers
 - When a database migration file (.sql) is added, removed, or modified.
@@ -50,5 +53,5 @@ Migrations are located inside the migrations directory and are executed sequenti
 - [docs/api/route-handlers.md](file:///e:/Projects/recallQ/docs/api/route-handlers.md) — API queries.
 - [docs/api/external-services.md](file:///e:/Projects/recallQ/docs/api/external-services.md) — Integrations context.
 
-AGENT OWNER: lib/db.ts
+AGENT OWNER: apps/web/lib/db.ts
 AGENT UPDATE: docs/api/database.md

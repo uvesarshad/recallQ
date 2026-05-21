@@ -1,18 +1,29 @@
 # dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.js
 .yarn-integrity
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
+
+# turborepo
+.turbo/
 
 # production
-/build
+build/
+
+# expo (apps/mobile, future)
+.expo/
+.expo-shared/
+
+# wxt (apps/extension, future)
+.output/
+.wxt/
 
 # misc
 .DS_Store

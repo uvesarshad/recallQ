@@ -6,7 +6,17 @@
       "Bash(node -e \"require\\('web-push'\\)\")",
       "Bash(npx tsc *)",
       "Bash(xargs basename -a)",
-      "Bash(node --experimental-strip-types tests/run-tests.ts)"
+      "Bash(node --experimental-strip-types tests/run-tests.ts)",
+      "Bash(pnpm --version)",
+      "Bash(git ls-tree *)",
+      "Bash(git mv *)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm rebuild *)",
+      "Bash(pnpm approve-builds *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm build *)"
     ]
   }
 }

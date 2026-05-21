@@ -1,0 +1,24 @@
+{
+  "name": "recallq-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.1.0",
+  "scripts": {
+    "dev": "turbo run dev --filter=@recall/web",
+    "build": "turbo run build --filter=@recall/web",
+    "start": "turbo run start --filter=@recall/web",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test --filter=@recall/web",
+    "db:migrate": "node scripts/migrate.js",
+    "db:migrate:latest": "node scripts/migrate-latest.js",
+    "worker:enrich": "pnpm --filter @recall/web worker:enrich",
+    "worker:reminders": "pnpm --filter @recall/web worker:reminders",
+    "telegram:webhook": "node scripts/register-telegram-webhook.js"
+  },
+  "devDependencies": {
+    "dotenv": "^17.3.1",
+    "pg": "latest",
+    "turbo": "^2.5.4"
+  }
+}
