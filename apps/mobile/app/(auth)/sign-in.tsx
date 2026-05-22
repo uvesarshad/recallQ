@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,6 +12,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import {
+  isAppleSignInAvailable,
+  signInWithApple,
+  useGoogleAuth,
+} from "@/lib/oauth";
 
 function getDefaultDeviceName(): string {
   if (Platform.OS === "ios") return "iPhone";
@@ -22,26 +27,54 @@ function getDefaultDeviceName(): string {
 export default function SignInScreen() {
   const router = useRouter();
   const { auth, signIn } = useAuth();
+  const deviceName = getDefaultDeviceName();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"password" | "apple" | "google" | null>(null);
 
-  // Already signed in — bounce to the feed.
+  const googleAuth = useGoogleAuth(deviceName);
+  // Only available if Google web/iOS/Android client IDs are configured.
+  const googleEnabled = Boolean(googleAuth.request);
+
+  // Apple flow is iOS-only.
+  const appleEnabled = isAppleSignInAvailable();
+
+  useEffect(() => {
+    if (googleAuth.response?.type === "success") {
+      void (async () => {
+        try {
+          const next = await googleAuth.exchange();
+          if (next) {
+            await signIn(next);
+            router.replace("/(tabs)");
+          }
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "Google sign-in failed");
+        } finally {
+          setSubmitting(null);
+        }
+      })();
+    } else if (googleAuth.response?.type === "error" || googleAuth.response?.type === "cancel") {
+      setSubmitting(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleAuth.response]);
+
   if (auth) return <Redirect href="/(tabs)" />;
 
-  async function handleSubmit() {
+  async function handlePasswordSubmit() {
     setError(null);
     if (!email.trim() || !password) {
       setError("Email and password are required.");
       return;
     }
-    setSubmitting(true);
+    setSubmitting("password");
     try {
       const result = await api.auth.issueToken({
         email: email.trim(),
         password,
-        device_name: getDefaultDeviceName(),
+        device_name: deviceName,
       });
       await signIn({
         token: result.token,
@@ -51,11 +84,37 @@ export default function SignInScreen() {
       });
       router.replace("/(tabs)");
     } catch (caught) {
-      const message =
-        caught instanceof Error ? caught.message : "Sign-in failed";
-      setError(message);
+      setError(caught instanceof Error ? caught.message : "Sign-in failed");
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
+    }
+  }
+
+  async function handleApple() {
+    setError(null);
+    setSubmitting("apple");
+    try {
+      const next = await signInWithApple(deviceName);
+      await signIn(next);
+      router.replace("/(tabs)");
+    } catch (caught) {
+      // User cancelling the Apple sheet throws — silent.
+      const message = caught instanceof Error ? caught.message : "Apple sign-in failed";
+      if (!/cancel/i.test(message)) setError(message);
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function handleGoogle() {
+    setError(null);
+    setSubmitting("google");
+    try {
+      await googleAuth.promptAsync();
+      // Response handled by the useEffect above.
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Google sign-in failed");
+      setSubmitting(null);
     }
   }
 
@@ -73,10 +132,44 @@ export default function SignInScreen() {
             Sign in
           </Text>
           <Text className="mt-2 text-sm text-text-mid">
-            Use your RecallQ email and password. New here? Sign up at recallq.xyz and come back.
+            Sign in with your RecallQ account. New here? Sign up at recallq.xyz and come back.
           </Text>
 
-          <View className="mt-8 gap-3">
+          {appleEnabled || googleEnabled ? (
+            <View className="mt-6 gap-3">
+              {appleEnabled ? (
+                <Pressable
+                  onPress={handleApple}
+                  disabled={submitting !== null}
+                  className="flex-row items-center justify-center gap-2 rounded-xl bg-black px-4 py-3.5 active:opacity-80 disabled:opacity-60"
+                >
+                  {submitting === "apple" ? <ActivityIndicator color="#fff" /> : null}
+                  <Text className="text-base font-semibold text-white">
+                    Continue with Apple
+                  </Text>
+                </Pressable>
+              ) : null}
+              {googleEnabled ? (
+                <Pressable
+                  onPress={handleGoogle}
+                  disabled={submitting !== null}
+                  className="flex-row items-center justify-center gap-2 rounded-xl bg-white px-4 py-3.5 active:opacity-80 disabled:opacity-60"
+                >
+                  {submitting === "google" ? <ActivityIndicator color="#000" /> : null}
+                  <Text className="text-base font-semibold text-black">
+                    Continue with Google
+                  </Text>
+                </Pressable>
+              ) : null}
+              <View className="my-2 flex-row items-center gap-3">
+                <View className="h-px flex-1 bg-border" />
+                <Text className="text-xs uppercase tracking-wider text-text-muted">Or</Text>
+                <View className="h-px flex-1 bg-border" />
+              </View>
+            </View>
+          ) : null}
+
+          <View className="mt-2 gap-3">
             <TextInput
               value={email}
               onChangeText={setEmail}
@@ -106,13 +199,13 @@ export default function SignInScreen() {
           ) : null}
 
           <Pressable
-            onPress={handleSubmit}
-            disabled={submitting}
+            onPress={handlePasswordSubmit}
+            disabled={submitting !== null}
             className="mt-6 flex-row items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3.5 active:opacity-80 disabled:opacity-60"
           >
-            {submitting ? <ActivityIndicator color="#fff" /> : null}
+            {submitting === "password" ? <ActivityIndicator color="#fff" /> : null}
             <Text className="text-base font-semibold text-white">
-              {submitting ? "Signing in…" : "Sign in"}
+              {submitting === "password" ? "Signing in…" : "Sign in with email"}
             </Text>
           </Pressable>
 

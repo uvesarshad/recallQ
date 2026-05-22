@@ -22,6 +22,13 @@ All application routes live under `/api/v1/*`. Paths below are shown without the
 - `/auth/tokens [POST]`: Exchange `{ email, password, device_name }` for a personal access token. Returns `{ token, id, prefix, device_name, created_at }` once; the raw `token` is never returned again. Used by the Chrome extension and the mobile apps. Validates input via `TokenIssueInputSchema` from `@recall/api-schema`. **Rate limited** (Stage 5): 5 attempts/IP/15min plus 10/email/hour. See `docs/security-audit.md`.
 - `/auth/tokens [GET]`: Lists the current user's active tokens. Session cookie only (not callable with a bearer token, to prevent stolen-token reconnaissance). Returns `{ tokens: TokenSummary[] }` (no raw values, just metadata).
 - `/auth/tokens/[id] [DELETE]`: Revokes a single token. Session cookie only, same rationale.
+- `/auth/oauth/token [POST]`: Mobile OAuth → PAT exchange. Body `{ provider: "google" | "apple", id_token, device_name, name? }`. Verifies the ID token signature against the provider's JWKS (`lib/oauth-verify.ts`), validates audience against `OAUTH_ALLOWED_*_AUDIENCES`, finds or creates the user, links the `accounts` row, mints a PAT. Same response shape as `POST /auth/tokens`. Rate limited 10/IP/15min.
+
+### Device + Push Endpoints
+
+- `/devices/push [POST]`: Register the calling device's Expo Push token. Auth via session OR bearer (so the mobile app can register itself with its newly-minted PAT). Idempotent — re-posting the same token updates `last_seen_at` rather than failing on UNIQUE.
+- `/devices/push [GET]`: Lists the user's active push devices. Session-only (mobile callers can't enumerate other devices via bearer).
+- `/devices/push/[id] [DELETE]`: Soft-revokes a device token (`revoked_at = now()`).
 
 ### Health Endpoint
 
@@ -67,6 +74,13 @@ All application routes live under `/api/v1/*`. Paths below are shown without the
 - AGENT NOTE: All external webhooks (such as Razorpay, email, and Telegram) must validate inbound signatures to prevent request spoofing.
 - AGENT NOTE: Inputs to any new `/api/v1/*` route must be validated against a Zod schema in `@recall/api-schema` via `parseBody(...)`. Inline `request.json()` without schema validation is not allowed.
 - AGENT NOTE: A route reachable from the Chrome extension or mobile app must use `requireUser(req)` (accepts both session cookie and bearer token), not `requireSessionUser()` (cookie only).
+
+### Stripe Billing Endpoints
+
+- `/payments/stripe/checkout [POST]`: Session-authed. Body `{ plan: "starter" | "pro" }`. Returns `{ sessionId, url }`. Client should redirect to `url` (Stripe-hosted Checkout). Rejects with 409 if the user has an active Razorpay subscription. Disabled with 501 if `STRIPE_SECRET_KEY` is not set.
+- `/payments/stripe/webhook [POST]`: No auth — Stripe-signed (`stripe-signature` header). Verifies via `STRIPE_WEBHOOK_SECRET`. Handles `checkout.session.completed`, `customer.subscription.{created,updated,deleted}`, `invoice.payment_failed`. Idempotent (all DB writes are upserts). Returns 200 on success, 400 on bad signature, 500 on handler error (Stripe retries).
+- `/payments/stripe/portal [POST]`: Session-authed. Creates a Stripe Billing Portal session for the user's `stripe_customer_id` (404 if they don't have one — they need to subscribe first). Returns `{ url }` for the client to redirect to. The Portal handles plan upgrades / downgrades, payment method updates, invoice viewing, and cancellation — so for Stripe users we route both "Manage" and "Cancel" into here.
+- `/payments/cancel-subscription [POST]`: Now provider-aware. Reads `users.billing_provider` and dispatches to either `cancelHostedSubscription` (Razorpay) or `cancelStripeSubscription`. Returns `{ success, provider }` so the client knows which path ran.
 
 ## Update Triggers
 - When adding, renaming, or deleting an API route handler under `apps/web/app/api/v1/`.

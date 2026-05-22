@@ -12,9 +12,59 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import type { ListItem } from "@recall/api-client";
 import { api } from "@/lib/api";
+import { listPendingCaptures, type PendingCapture } from "@/lib/offline-queue";
+
+// Adapter so pending offline captures can render in the same FlatList row
+// component as server-side items, marked with a `pending: true` flag.
+type FeedRow = (ListItem & { pending?: false }) | (LocalPendingRow & { pending: true });
+
+type LocalPendingRow = {
+  id: string;
+  type: "url" | "text";
+  title: null;
+  summary: null;
+  tags: null;
+  source: "mobile";
+  created_at: string;
+  raw_url: string | null;
+  raw_text: string | null;
+  collection_id: null;
+  collection_name: null;
+  enriched: false;
+  reminder_at: null;
+  reminder_sent: false;
+  image_url: null;
+  blur_data_url: null;
+  file_name: null;
+  file_mime_type: null;
+};
+
+function fromPending(row: PendingCapture): FeedRow {
+  return {
+    pending: true,
+    id: `pending-${row.id}`,
+    type: row.type,
+    title: null,
+    summary: null,
+    tags: null,
+    source: "mobile",
+    created_at: row.created_at,
+    raw_url: row.raw_url,
+    raw_text: row.raw_text,
+    collection_id: null,
+    collection_name: null,
+    enriched: false,
+    reminder_at: null,
+    reminder_sent: false,
+    image_url: null,
+    blur_data_url: null,
+    file_name: null,
+    file_mime_type: null,
+  };
+}
 
 export default function FeedScreen() {
-  const [items, setItems] = useState<ListItem[]>([]);
+  const [items, setItems] = useState<FeedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,11 +73,16 @@ export default function FeedScreen() {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
+    // Local pending captures always render — even if the server fetch
+    // fails, the user sees what they captured offline.
+    const pending = await listPendingCaptures().then((rows) => rows.map(fromPending));
     try {
       const data = await api.items.list({ limit: 50 });
-      setItems(data.items ?? []);
+      const server: FeedRow[] = (data.items ?? []).map((item) => ({ ...item, pending: false }));
+      setItems([...pending, ...server]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to load");
+      setItems(pending);
+      setError(caught instanceof Error ? caught.message : "Failed to load server items");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -80,7 +135,7 @@ export default function FeedScreen() {
   );
 }
 
-function ItemRow({ item }: { item: ListItem }) {
+function ItemRow({ item }: { item: FeedRow }) {
   const title = item.title || item.raw_url || item.file_name || item.raw_text?.slice(0, 80) || "Untitled";
   const host = (() => {
     if (!item.raw_url) return null;
@@ -90,6 +145,27 @@ function ItemRow({ item }: { item: ListItem }) {
       return null;
     }
   })();
+
+  // Offline-only rows: render the same card but unlinked (no server id yet)
+  // and badged "Pending sync". Once the queue drains, the row is replaced
+  // with the real server item.
+  if (item.pending) {
+    return (
+      <View className="overflow-hidden rounded-2xl border border-amber-500/30 bg-amber-500/5">
+        <View className="p-4">
+          <Text className="text-sm font-medium text-text-primary" numberOfLines={2}>
+            {title}
+          </Text>
+          <View className="mt-3 flex-row items-center gap-2">
+            <Text className="text-[11px] uppercase tracking-wider text-amber-300">
+              Pending sync
+            </Text>
+            {host ? <Text className="text-[11px] text-text-muted">· {host}</Text> : null}
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <Link href={`/item/${item.id}`} asChild>

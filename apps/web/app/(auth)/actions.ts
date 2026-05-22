@@ -69,6 +69,11 @@ export async function signInWithGoogle(formData: FormData) {
   await signIn("google", { redirectTo });
 }
 
+export async function signInWithApple(formData: FormData) {
+  const redirectTo = getSafeRedirectTarget(formData.get("redirectTo"));
+  await signIn("apple", { redirectTo });
+}
+
 export async function signInWithPassword(formData: FormData) {
   const redirectTo = getSafeRedirectTarget(formData.get("redirectTo"));
   const email = normaliseEmail(formData.get("email"));

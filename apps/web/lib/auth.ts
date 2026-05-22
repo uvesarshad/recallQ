@@ -3,10 +3,19 @@ import type { Session } from "next-auth";
 import PostgresAdapter from "@auth/pg-adapter";
 import { db, poolInstance } from "@/lib/db";
 import { env } from "@/lib/env";
+import Apple from "next-auth/providers/apple";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config";
+import { getAppleProviderCredentials } from "@/lib/apple-secret";
 import { verifyPassword } from "@/lib/password";
+
+// Resolve the Apple `client_secret` JWT once at module load via top-level
+// await. NextAuth's Apple provider expects a synchronous string; the JWT
+// itself is valid ~5 months so a per-server-boot resolution is fine.
+// Long-lived servers should redeploy / restart inside that window. When
+// Apple isn't configured, this is null and the provider is omitted.
+const appleCredentials = await getAppleProviderCredentials();
 
 function normalizeAuthUrlEnvironment() {
   if (process.env.AUTH_URL || process.env.NODE_ENV !== "development") {
@@ -67,6 +76,14 @@ const nextAuth = NextAuth({
   providers: [
     ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
       ? [Google({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET })]
+      : []),
+    // Apple's client secret is a short-lived ES256 JWT signed with the .p8
+    // private key (see `lib/apple-secret.ts`). NextAuth requires the secret
+    // as a string at provider-construction time, so we resolved it via the
+    // top-level await above. JWT is valid ~5 months — plan to redeploy or
+    // restart inside that window.
+    ...(appleCredentials
+      ? [Apple({ clientId: appleCredentials.clientId, clientSecret: appleCredentials.clientSecret })]
       : []),
     Credentials({
       credentials: {

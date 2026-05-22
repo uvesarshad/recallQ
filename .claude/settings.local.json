@@ -24,7 +24,9 @@
       "Bash(pnpm why *)",
       "Bash(rm -rf node_modules apps/*/node_modules packages/*/node_modules pnpm-lock.yaml 2>&1; echo \"---\"; pnpm install 2>&1 | tail -10)",
       "Bash(rm -rf node_modules apps/*/node_modules packages/*/node_modules pnpm-lock.yaml 2>&1; pnpm install 2>&1 | tail -5; echo \"---TYPES---\"; ls node_modules/.pnpm | grep \"@types+react@\" 2>&1)",
-      "Bash(rm -rf node_modules apps/*/node_modules packages/*/node_modules pnpm-lock.yaml 2>&1; pnpm install 2>&1 | tail -5; echo \"---STORE---\"; ls node_modules/.pnpm | grep \"@types+react@\" 2>&1)"
+      "Bash(rm -rf node_modules apps/*/node_modules packages/*/node_modules pnpm-lock.yaml 2>&1; pnpm install 2>&1 | tail -5; echo \"---STORE---\"; ls node_modules/.pnpm | grep \"@types+react@\" 2>&1)",
+      "Bash(pnpm --filter @recall/web typecheck)",
+      "Bash(pnpm --filter @recall/web add jose@^6.0.0)"
     ],
     "additionalDirectories": [
       "E:\\Projects\\recallQ\\apps\\*"

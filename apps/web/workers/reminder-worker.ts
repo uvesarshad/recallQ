@@ -5,10 +5,25 @@ import { db } from "../lib/db";
 import { logger } from "../lib/logger";
 import { sendTelegramMessage } from "../lib/telegram";
 import { isPushEnabled, sendPushNotification, type PushSubscriptionJSON } from "../lib/push";
+import {
+  isPermanentlyInvalid,
+  sendExpoPushBatch,
+  type ExpoPushMessage,
+} from "../lib/expo-push";
 import { installCrashHandlers, startHeartbeat } from "../lib/worker-heartbeat";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend's constructor throws when RESEND_API_KEY is missing (since v6.x).
+// Make it lazy so the worker can still run for Telegram + push deliveries
+// when email isn't configured. Email channels are skipped with a warn.
+let cachedResend: Resend | null = null;
+function getResend(): Resend | null {
+  if (cachedResend) return cachedResend;
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  cachedResend = new Resend(key);
+  return cachedResend;
+}
 
 async function sendReminder(reminder: any) {
   const { channels, user_id, item_id } = reminder;
@@ -33,6 +48,11 @@ Link: ${item.raw_url || "N/A"}`;
   for (const channel of channels) {
     try {
       if (channel === 'email' && user.email) {
+        const resend = getResend();
+        if (!resend) {
+          logger.warn("reminder", "RESEND_API_KEY not set — skipping email channel", { item_id: item.id });
+          continue;
+        }
         await resend.emails.send({
           from: `reminders@${process.env.APP_DOMAIN}`,
           to: user.email,
@@ -48,16 +68,26 @@ Link: ${item.raw_url || "N/A"}`;
         ].filter(Boolean).join("\n");
         await sendTelegramMessage(user.telegram_chat_id, telegramBody);
         logger.info("reminder", `Telegram sent`, { item_id: item.id });
-      } else if (channel === 'push' && user.push_subscription && isPushEnabled()) {
-        const sub = typeof user.push_subscription === 'string'
-          ? JSON.parse(user.push_subscription)
-          : user.push_subscription as PushSubscriptionJSON;
-        await sendPushNotification(sub, {
-          title: `⏰ Reminder`,
-          body: label,
-          url: item.raw_url ?? undefined,
+      } else if (channel === 'push') {
+        // Fan out to BOTH web push (browser) and Expo Push (mobile) so a
+        // user with their phone signed in gets the reminder even if they
+        // haven't accepted web push in the browser. Both are best-effort.
+        if (user.push_subscription && isPushEnabled()) {
+          const sub = typeof user.push_subscription === 'string'
+            ? JSON.parse(user.push_subscription)
+            : user.push_subscription as PushSubscriptionJSON;
+          await sendPushNotification(sub, {
+            title: `⏰ Reminder`,
+            body: label,
+            url: item.raw_url ?? undefined,
+          });
+          logger.info("reminder", `Web push sent`, { item_id: item.id });
+        }
+
+        await sendExpoPushToUser(user_id, label, {
+          id: String(item.id),
+          raw_url: item.raw_url ?? null,
         });
-        logger.info("reminder", `Push sent`, { item_id: item.id });
       }
     } catch (err) {
       logger.error("reminder", `Channel failed`, { channel, item_id: item.id, error: String(err) });
@@ -72,6 +102,52 @@ Link: ${item.raw_url || "N/A"}`;
 function summarizeText(value: string) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length > 90 ? `${normalized.slice(0, 87)}...` : normalized;
+}
+
+// Fans a reminder out to every active Expo Push token for `userId`. Marks
+// tokens revoked when Expo reports them as permanently invalid
+// (DeviceNotRegistered = app uninstalled / push permission removed).
+async function sendExpoPushToUser(
+  userId: string,
+  label: string,
+  item: { id: string; raw_url: string | null },
+): Promise<void> {
+  const tokensResult = await db.query<{ id: string; token: string }>(
+    `SELECT id, token FROM device_push_tokens
+      WHERE user_id = $1 AND revoked_at IS NULL`,
+    [userId],
+  );
+  if (tokensResult.rowCount === 0) return;
+
+  const messages: ExpoPushMessage[] = tokensResult.rows.map((row) => ({
+    to: row.token,
+    title: "⏰ Reminder",
+    body: label,
+    sound: "default",
+    priority: "high",
+    // Mobile app reads `data.itemId` on notification tap to deep-link.
+    data: { itemId: item.id, url: item.raw_url ?? null },
+  }));
+
+  const results = await sendExpoPushBatch(messages);
+  const revokeIds: string[] = [];
+  for (let i = 0; i < results.length; i++) {
+    if (isPermanentlyInvalid(results[i].ticket)) {
+      revokeIds.push(tokensResult.rows[i].id);
+    }
+  }
+  if (revokeIds.length > 0) {
+    await db.query(
+      `UPDATE device_push_tokens SET revoked_at = now() WHERE id = ANY($1::uuid[])`,
+      [revokeIds],
+    );
+    logger.warn("reminder", "Revoked dead Expo tokens", { count: revokeIds.length });
+  }
+  logger.info("reminder", "Expo Push sent", {
+    item_id: item.id,
+    sent: messages.length,
+    revoked: revokeIds.length,
+  });
 }
 
 function escapeHtml(value: string) {

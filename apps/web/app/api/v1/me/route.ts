@@ -1,6 +1,8 @@
 import { apiError, apiOk } from "@/lib/api";
 import { isBillingEnabled, isSelfHosted } from "@/lib/billing";
+import { isStripeEnabled } from "@/lib/billing-stripe";
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 import { getPlanLimits } from "@/lib/plan-limits";
 import { requireSessionUser } from "@/lib/request-auth";
 import { z } from "zod";
@@ -26,7 +28,8 @@ export async function GET() {
             inbound_email_address, plan, created_at,
             subscription_plan, subscription_status, subscription_current_start,
             subscription_current_end, subscription_cancel_at_cycle_end,
-            razorpay_subscription_id,
+            razorpay_subscription_id, stripe_subscription_id, stripe_customer_id,
+            billing_provider,
             saves_this_month, storage_used_bytes,
             chat_queries_today, chat_queries_reset_date
      FROM users
@@ -36,12 +39,17 @@ export async function GET() {
 
   const row = result.rows[0] ?? null;
   const limits = row ? getPlanLimits(row.plan ?? "free") : null;
+  const razorpayConfigured = Boolean(env.RAZORPAY_KEY_ID || env.NEXT_PUBLIC_RAZORPAY_KEY_ID);
 
   return apiOk({
     user: row,
     billing: {
       enabled: isBillingEnabled(),
       selfHosted: isSelfHosted(),
+      providers: {
+        razorpay: razorpayConfigured,
+        stripe: isStripeEnabled(),
+      },
     },
     usage: row && limits ? {
       saves_this_month: row.saves_this_month ?? 0,

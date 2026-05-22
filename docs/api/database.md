@@ -47,6 +47,8 @@ Migrations are located inside the migrations directory and are executed sequenti
 - 012_worker_heartbeats.sql: Creates worker_heartbeats so /api/v1/health can report whether the enrichment and reminders daemons are alive.
 - 013_rate_limits.sql: Creates rate_limits for the Postgres-backed token-bucket-ish rate limiter introduced in Stage 5 — no Redis required.
 - 014_item_blur.sql: Adds items.blur_data_url (TEXT). Tiny base64 JPEG (~200-400 bytes) populated during enrichment by apps/web/lib/blur.ts via sharp; consumed by the ItemCard's next/image placeholder to prevent CLS.
+- 015_stripe_billing.sql: Adds Stripe-specific columns (stripe_customer_id, stripe_subscription_id, stripe_price_id) alongside the existing Razorpay columns, plus a `billing_provider` discriminator column (`razorpay` | `stripe` | NULL) that endpoints and webhooks read to route correctly. A user can be on at most one provider at a time. Shared subscription-state columns (subscription_plan, subscription_status, subscription_current_*, subscription_cancel_at_cycle_end) are provider-agnostic — both adapters write the same shape so plan-limit checks don't care which billing system the user is on.
+- 016_device_push_tokens.sql: Per-device Expo Push token registry for mobile reminder delivery. Columns: id (UUID), user_id (FK), token (UNIQUE — `ExponentPushToken[…]`), platform (ios | android | web), device_name, created_at, last_seen_at, revoked_at. Partial index `(user_id) WHERE revoked_at IS NULL` for fan-out lookups. The reminder worker auto-marks tokens revoked when Expo returns `DeviceNotRegistered`.
 
 ## Update Triggers
 - When a database migration file (.sql) is added, removed, or modified.

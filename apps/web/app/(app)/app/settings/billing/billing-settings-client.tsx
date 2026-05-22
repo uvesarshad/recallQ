@@ -20,6 +20,8 @@ type UsageStats = {
   max_chat_queries_per_day: number;
 };
 
+type BillingProvider = "razorpay" | "stripe";
+
 type ProfileResponse = {
   user: {
     name?: string | null;
@@ -31,10 +33,17 @@ type ProfileResponse = {
     subscription_current_end?: string | null;
     subscription_cancel_at_cycle_end?: boolean | null;
     razorpay_subscription_id?: string | null;
+    stripe_subscription_id?: string | null;
+    stripe_customer_id?: string | null;
+    billing_provider?: BillingProvider | null;
   } | null;
   billing: {
     enabled: boolean;
     selfHosted: boolean;
+    providers?: {
+      razorpay: boolean;
+      stripe: boolean;
+    };
   };
   usage?: UsageStats | null;
 };
@@ -122,13 +131,24 @@ export default function BillingSettingsClient() {
   const [loading, setLoading] = useState(true);
   const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Provider preference for new subscriptions. Persisted only in component
+  // state — the actual billing_provider on the user row is set at checkout time.
+  const [preferredProvider, setPreferredProvider] = useState<BillingProvider>("razorpay");
 
   async function loadProfile() {
     setLoading(true);
     const res = await fetch("/api/me");
     const data = (await res.json()) as ProfileResponse;
     setProfile(data);
+    // Default the provider toggle to whichever is configured. Prefer Stripe
+    // when both are available — wider geographic coverage.
+    const providers = data.billing.providers;
+    if (providers) {
+      if (providers.stripe) setPreferredProvider("stripe");
+      else if (providers.razorpay) setPreferredProvider("razorpay");
+    }
     setLoading(false);
   }
 
@@ -136,45 +156,57 @@ export default function BillingSettingsClient() {
     void loadProfile();
   }, []);
 
+  async function startRazorpayCheckout(plan: "starter" | "pro") {
+    const res = await fetch("/api/payments/create-subscription", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to start Razorpay checkout");
+
+    await ensureRazorpayScript();
+    if (!window.Razorpay) throw new Error("Razorpay checkout is unavailable");
+
+    const instance = new window.Razorpay({
+      key: data.key,
+      subscription_id: data.subscriptionId,
+      name: "RecallQ",
+      description: `${data.planLabel} annual subscription`,
+      handler: async () => {
+        await loadProfile();
+      },
+      prefill: {
+        name: profile?.user?.name || "",
+        email: profile?.user?.email || "",
+      },
+      theme: { color: "#6366f1" },
+    });
+    instance.open();
+  }
+
+  async function startStripeCheckout(plan: "starter" | "pro") {
+    const res = await fetch("/api/payments/stripe/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to start Stripe checkout");
+    if (!data.url) throw new Error("Stripe did not return a checkout URL");
+    // Full-page redirect — Stripe Checkout requires its own origin.
+    window.location.assign(data.url as string);
+  }
+
   async function startCheckout(plan: "starter" | "pro") {
     setError(null);
     setSubmittingPlan(plan);
-
     try {
-      const res = await fetch("/api/payments/create-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start checkout");
+      if (preferredProvider === "stripe") {
+        await startStripeCheckout(plan);
+      } else {
+        await startRazorpayCheckout(plan);
       }
-
-      await ensureRazorpayScript();
-      if (!window.Razorpay) {
-        throw new Error("Razorpay checkout is unavailable");
-      }
-
-      const instance = new window.Razorpay({
-        key: data.key,
-        subscription_id: data.subscriptionId,
-        name: "Recall",
-        description: `${data.planLabel} annual subscription`,
-        handler: async () => {
-          await loadProfile();
-        },
-        prefill: {
-          name: profile?.user?.name || "",
-          email: profile?.user?.email || "",
-        },
-        theme: {
-          color: "#111827",
-        },
-      });
-
-      instance.open();
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : "Failed to start checkout");
     } finally {
@@ -191,15 +223,27 @@ export default function BillingSettingsClient() {
         method: "POST",
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to cancel subscription");
-      }
-
+      if (!res.ok) throw new Error(data.error || "Failed to cancel subscription");
       await loadProfile();
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : "Failed to cancel subscription");
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function openStripePortal() {
+    setError(null);
+    setPortalLoading(true);
+    try {
+      const res = await fetch("/api/payments/stripe/portal", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to open portal");
+      if (!data.url) throw new Error("Stripe did not return a portal URL");
+      window.location.assign(data.url as string);
+    } catch (portalError) {
+      setError(portalError instanceof Error ? portalError.message : "Failed to open portal");
+      setPortalLoading(false);
     }
   }
 
@@ -212,7 +256,7 @@ export default function BillingSettingsClient() {
       <section className="rounded-modals border border-border bg-surface p-6">
         <h1 className="text-lg font-semibold text-text-primary">Billing</h1>
         <p className="mt-2 text-sm text-text-muted">
-          This deployment is running in self-hosted mode. Paid plans, Razorpay checkout, and hosted usage limits are disabled here.
+          This deployment is running in self-hosted mode. Paid plans and hosted usage limits are disabled here.
         </p>
       </section>
     );
@@ -223,6 +267,12 @@ export default function BillingSettingsClient() {
   const currentPlan = user.plan;
   const currentEnd = formatDate(user.subscription_current_end);
   const hasPaidSubscription = currentPlan !== "free";
+  const providers = profile.billing.providers ?? { razorpay: true, stripe: false };
+  const bothProvidersAvailable = providers.razorpay && providers.stripe;
+  // Discriminator for the existing subscriber's manage flow.
+  const subscribedProvider: BillingProvider | null =
+    user.billing_provider ??
+    (user.stripe_subscription_id ? "stripe" : user.razorpay_subscription_id ? "razorpay" : null);
 
   return (
     <div className="space-y-6">
@@ -230,40 +280,58 @@ export default function BillingSettingsClient() {
         <section className="rounded-modals border border-border bg-surface p-6">
           <h2 className="text-lg font-semibold text-text-primary">Usage this period</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <UsageMeter
-              label="Saves this month"
-              used={usage.saves_this_month}
-              max={usage.max_saves_per_month}
-            />
-            <UsageMeter
-              label="Storage used"
-              used={usage.storage_used_bytes}
-              max={usage.max_storage_bytes}
-              unit="bytes"
-            />
-            <UsageMeter
-              label="Chat queries today"
-              used={usage.chat_queries_today}
-              max={usage.max_chat_queries_per_day}
-            />
+            <UsageMeter label="Saves this month" used={usage.saves_this_month} max={usage.max_saves_per_month} />
+            <UsageMeter label="Storage used" used={usage.storage_used_bytes} max={usage.max_storage_bytes} unit="bytes" />
+            <UsageMeter label="Chat queries today" used={usage.chat_queries_today} max={usage.max_chat_queries_per_day} />
           </div>
         </section>
       )}
 
       <section className="rounded-modals border border-border bg-surface p-6">
-        <h1 className="text-lg font-semibold text-text-primary">Annual plans</h1>
-        <p className="mt-2 text-sm text-text-muted">
-          Hosted Recall uses annual billing only. Webhooks update access automatically after successful Razorpay events.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-semibold text-text-primary">Annual plans</h1>
+            <p className="mt-2 text-sm text-text-muted">
+              Hosted RecallQ uses annual billing. Webhooks update access automatically after a successful payment.
+            </p>
+          </div>
+
+          {bothProvidersAvailable && !hasPaidSubscription ? (
+            <div role="group" aria-label="Choose billing provider" className="inline-flex rounded-buttons border border-border bg-bg p-1 text-xs">
+              <button
+                type="button"
+                aria-pressed={preferredProvider === "stripe"}
+                onClick={() => setPreferredProvider("stripe")}
+                className={`rounded-buttons px-3 py-1.5 transition ${preferredProvider === "stripe" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
+              >
+                Pay with Stripe
+              </button>
+              <button
+                type="button"
+                aria-pressed={preferredProvider === "razorpay"}
+                onClick={() => setPreferredProvider("razorpay")}
+                className={`rounded-buttons px-3 py-1.5 transition ${preferredProvider === "razorpay" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
+              >
+                Pay with Razorpay
+              </button>
+            </div>
+          ) : null}
+        </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {planCards.map((plan) => {
             const isCurrent = currentPlan === plan.id;
             const isPaidPlan = plan.id === "starter" || plan.id === "pro";
-              const disabled =
-                !!submittingPlan ||
-                (isCurrent && plan.id !== "free") ||
-                (!!user.razorpay_subscription_id && hasPaidSubscription && !isCurrent);
+            const disabled =
+              !!submittingPlan ||
+              (isCurrent && plan.id !== "free") ||
+              (hasPaidSubscription && !isCurrent);
+
+            const ctaLabel = isCurrent
+              ? "Current plan"
+              : submittingPlan === plan.id
+                ? preferredProvider === "stripe" ? "Opening Stripe…" : "Opening Razorpay…"
+                : `Choose ${plan.title}`;
 
             return (
               <div key={plan.id} className={`rounded-cards border p-5 ${isCurrent ? "border-brand bg-brand/5" : "border-border bg-bg"}`}>
@@ -289,7 +357,7 @@ export default function BillingSettingsClient() {
                     disabled={disabled}
                     className="mt-5 w-full rounded-buttons bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {submittingPlan === plan.id ? "Opening checkout..." : isCurrent ? "Current plan" : `Choose ${plan.title}`}
+                    {ctaLabel}
                   </button>
                 ) : (
                   <div className="mt-5 rounded-buttons border border-border px-4 py-2 text-center text-sm text-text-muted">
@@ -300,10 +368,24 @@ export default function BillingSettingsClient() {
             );
           })}
         </div>
+
+        {!hasPaidSubscription && bothProvidersAvailable ? (
+          <p className="mt-4 text-xs text-text-muted">
+            Stripe accepts most international cards and offers a self-service portal for upgrades / invoices. Razorpay is the better fit for users in India (UPI, NetBanking).
+          </p>
+        ) : null}
       </section>
 
       <section className="rounded-modals border border-border bg-surface p-6">
-        <h2 className="text-lg font-semibold text-text-primary">Subscription status</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold text-text-primary">Subscription status</h2>
+          {subscribedProvider ? (
+            <span className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-mid">
+              via {subscribedProvider}
+            </span>
+          ) : null}
+        </div>
+
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div className="rounded-cards border border-border bg-bg p-4">
             <div className="text-xs uppercase tracking-wide text-text-muted">Plan</div>
@@ -326,13 +408,30 @@ export default function BillingSettingsClient() {
         </div>
 
         {hasPaidSubscription ? (
-          <button
-            onClick={cancelSubscription}
-            disabled={cancelling}
-            className="mt-5 rounded-buttons border border-border px-4 py-2 text-sm font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {cancelling ? "Cancelling..." : "Cancel at period end"}
-          </button>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {subscribedProvider === "stripe" ? (
+              <>
+                <button
+                  onClick={openStripePortal}
+                  disabled={portalLoading}
+                  className="rounded-buttons bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {portalLoading ? "Opening portal…" : "Manage subscription"}
+                </button>
+                <p className="w-full text-xs text-text-muted">
+                  Update your card, view invoices, switch plans, or cancel from Stripe&apos;s hosted portal.
+                </p>
+              </>
+            ) : (
+              <button
+                onClick={cancelSubscription}
+                disabled={cancelling}
+                className="rounded-buttons border border-border px-4 py-2 text-sm font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cancelling ? "Cancelling..." : "Cancel at period end"}
+              </button>
+            )}
+          </div>
         ) : null}
 
         {error ? <p className="mt-4 text-sm text-red-500">{error}</p> : null}

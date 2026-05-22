@@ -5,6 +5,7 @@ import {
   setStoredAuth,
   type StoredAuth,
 } from "./auth-storage";
+import { registerForPushNotifications } from "./push";
 
 type AuthContextValue = {
   auth: StoredAuth | null;
@@ -24,12 +25,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const stored = await getStoredAuth();
       setAuth(stored);
       setLoading(false);
+      // Already-signed-in users re-register their push token on every app
+      // boot (it can rotate). Best-effort — failures are swallowed inside.
+      if (stored) {
+        void registerForPushNotifications(stored.deviceName);
+      }
     })();
   }, []);
 
   const signIn = useCallback(async (next: StoredAuth) => {
     await setStoredAuth(next);
     setAuth(next);
+    // Register push immediately after sign-in so the next reminder fires
+    // to this device.
+    void registerForPushNotifications(next.deviceName);
   }, []);
 
   const signOut = useCallback(async () => {

@@ -40,6 +40,16 @@ Recall utilizes a Zod validation schema inside lib/env.ts to enforce exact types
 - RAZORPAY_PLAN_PRO_YEARLY_ID: Server-side Razorpay subscription plan identifier for the Pro plan. Optional.
 - DEV_BYPASS_LOGIN: Server-side development flag. Accepts: true or false. When true, bypasses NextAuth and creates a mock developer session automatically. Optional.
 - LOG_LEVEL: Threshold for `apps/web/lib/logger.ts`. Accepts: debug, info, warn, error. Defaults to `info` in production and `debug` everywhere else. Affects web routes, workers, and any module that imports the shared logger. Optional.
+- STRIPE_SECRET_KEY: Server-side Stripe secret key (`sk_live_…` / `sk_test_…`). Optional — Stripe billing endpoints return 501 until this is set.
+- STRIPE_PUBLISHABLE_KEY / NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: Stripe publishable key. The `NEXT_PUBLIC_` variant is the only one exposed to the browser; needed only if/when we render Stripe Elements client-side (the current Checkout flow is server-side only and doesn't need it). Optional.
+- STRIPE_WEBHOOK_SECRET: Signing secret from the Stripe dashboard webhook endpoint. Required for `/api/v1/payments/stripe/webhook` to accept events. Optional (missing secret causes the endpoint to reject all events with 400).
+- STRIPE_PRICE_STARTER_YEARLY_ID / STRIPE_PRICE_PRO_YEARLY_ID: Stripe `price_…` IDs created in the dashboard. Map to the Starter and Pro plans. Optional.
+- APPLE_CLIENT_ID: Sign in with Apple Services ID for the web (e.g. `ai.montr.recallq.signin`). Optional — the Apple button is hidden when missing.
+- APPLE_TEAM_ID: 10-char Apple Team ID from the Developer dashboard.
+- APPLE_KEY_ID: 10-char Key ID from the .p8 you generated.
+- APPLE_PRIVATE_KEY: Full PEM contents of the .p8, including BEGIN/END lines. Store newlines as literal `\n` in .env — `lib/apple-secret.ts` restores them.
+- OAUTH_ALLOWED_GOOGLE_AUDIENCES: Comma-separated additional audiences the mobile OAuth-exchange endpoint accepts beyond `GOOGLE_CLIENT_ID`. Set to your Google iOS + Android OAuth client IDs.
+- OAUTH_ALLOWED_APPLE_AUDIENCES: Comma-separated additional audiences accepted beyond `APPLE_CLIENT_ID`. Set to your iOS bundle id (e.g. `ai.montr.recallq`).
 
 ## Security Constraints
 - AGENT AVOID: Never expose secret keys to the browser. Only NEXT_PUBLIC_RAZORPAY_KEY_ID is public-safe. All other secrets are strictly server-side.

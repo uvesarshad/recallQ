@@ -208,6 +208,7 @@ export async function createHostedSubscription(params: {
          subscription_plan = $3,
          subscription_status = $4,
          subscription_cancel_at_cycle_end = FALSE,
+         billing_provider = 'razorpay',
          updated_at = NOW()
      WHERE id = $5`,
     [
