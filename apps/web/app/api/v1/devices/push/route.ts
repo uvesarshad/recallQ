@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { fail, ok, parseBody } from "@/lib/api-response";
 import { isExpoPushToken } from "@/lib/expo-push";
+import { rateLimit } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/request-auth";
 
 const RegisterSchema = z.object({
@@ -21,6 +22,17 @@ const RegisterSchema = z.object({
 export async function POST(req: Request): Promise<Response> {
   const user = await requireUser(req);
   if (!user) return fail("unauthorized", "Sign in required", 401);
+
+  // Idempotent registration but still gate against a misbehaving mobile
+  // client looping every second. 60/user/hour leaves room for token rotates.
+  const limit = await rateLimit({
+    key: `device-push:user:${user.id}`,
+    limit: 60,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!limit.allowed) {
+    return fail("rate_limited", "Too many push registrations from this account.", 429);
+  }
 
   const body = await parseBody(req, RegisterSchema);
   if (!body.ok) return body.response;

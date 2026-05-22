@@ -1,38 +1,57 @@
 "use client";
 
-import { BookOpen, FileUp, Link, MessageSquare, Network } from "lucide-react";
+import {
+  ArrowRight,
+  Globe,
+  Mail,
+  Send,
+  Smartphone,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
 import { openCreateDialog } from "@/components/CreateItemDialog";
 
-const steps = [
+// Empty-state for a fresh archive. Matches the redesigned Feed: same
+// max-w-3xl column, same card vocabulary, semantic color tokens only.
+// Lists the four capture surfaces that exist today (Web / Extension /
+// Mobile / Telegram-and-Email) so the user can pick whichever feels
+// closest to how they actually save things.
+
+const surfaces = [
   {
-    Icon: Link,
-    title: "Save a link",
-    description: "Paste any URL into the capture bar. Recall will fetch the title, summary, and tags automatically.",
-    action: "Try it now",
-    color: "text-item-link",
-    bg: "bg-item-link/10",
-  },
-  {
-    Icon: FileUp,
-    title: "Upload a file",
-    description: "PDFs, images, Word docs, and spreadsheets are all supported. Use the File tab in the capture dialog.",
-    action: "Open capture",
-    color: "text-item-file",
-    bg: "bg-item-file/10",
-  },
-  {
-    Icon: MessageSquare,
-    title: "Chat with your archive",
-    description: "Once you have a few items saved, ask questions in the Chat view and get cited answers from your content.",
-    action: null,
+    Icon: Zap,
+    title: "Quick capture",
+    description: "Paste any URL or note straight from the app. Opens with ⌘⇧C.",
+    cta: "Open capture",
+    onClick: () => openCreateDialog(),
     color: "text-brand",
     bg: "bg-brand/10",
   },
   {
-    Icon: Network,
-    title: "Explore the knowledge graph",
-    description: "Recall automatically links related items. Visit the Graph view to see your archive as a connected map.",
-    action: null,
+    Icon: Globe,
+    title: "Chrome extension",
+    description: "Right-click on any link or selection → Save to RecallQ. Background sync to your archive.",
+    cta: "Get extension",
+    href: "https://chrome.google.com/webstore",
+    color: "text-item-link",
+    bg: "bg-item-link/10",
+  },
+  {
+    Icon: Smartphone,
+    title: "iOS & Android",
+    description: "Share to RecallQ from any app. Works offline — captures sync when you're back online.",
+    cta: "Get the app",
+    href: "/app/settings/integrations",
+    color: "text-item-media",
+    bg: "bg-item-media/10",
+  },
+  {
+    Icon: Send,
+    title: "Telegram & email",
+    description: "Forward anything from Telegram or your inbox to your private RecallQ address.",
+    cta: "Set up",
+    href: "/app/settings/integrations",
     color: "text-item-note",
     bg: "bg-item-note/10",
   },
@@ -40,43 +59,100 @@ const steps = [
 
 export default function OnboardingBanner() {
   return (
-    <div className="mx-auto mt-6 max-w-7xl px-5 pb-10">
-      <div className="mb-6 rounded-modals border border-brand/20 bg-brand/5 px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="rounded-full bg-brand/10 p-2">
-            <BookOpen className="h-5 w-5 text-brand" />
+    <div className="mx-auto mt-2 max-w-3xl px-5 pb-12">
+      {/* Hero */}
+      <div className="rounded-modals border border-brand/20 bg-gradient-to-br from-brand/8 via-surface to-surface px-7 py-8">
+        <div className="flex items-start gap-4">
+          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand">
+            <Sparkles className="h-5 w-5" />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-text-primary">Welcome to Recall</h3>
-            <p className="text-sm text-text-muted">Your library is empty. Here are four ways to get started.</p>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-semibold tracking-tight text-text-primary">
+              Your archive is empty.
+            </h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-text-mid">
+              Save anything from anywhere — RecallQ enriches it with a title, summary, and tags in the background. Pick a way to get started.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openCreateDialog()}
+                className="inline-flex items-center gap-2 rounded-buttons bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover"
+              >
+                <Zap className="h-4 w-4" />
+                Capture something
+              </button>
+              <Link
+                href="/app/chat"
+                className="inline-flex items-center gap-2 rounded-buttons border border-border bg-surface px-4 py-2 text-sm text-text-primary hover:border-brand/40"
+              >
+                Try chat →
+              </Link>
+              <span className="ml-1 text-[11px] text-text-muted">
+                Tip: press <kbd className="rounded border border-border bg-bg px-1.5 font-mono text-[10px]">?</kbd> for keyboard shortcuts
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {steps.map(({ Icon, title, description, action, color, bg }) => (
-          <div key={title} className="rounded-cards border border-border bg-surface p-5">
-            <div className="flex items-start gap-4">
-              <div className={`shrink-0 rounded-lg p-2 ${bg}`}>
-                <Icon className={`h-5 w-5 ${color}`} />
+      {/* Capture surface grid */}
+      <h3 className="mt-10 mb-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+        Capture from anywhere
+      </h3>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {surfaces.map(({ Icon, title, description, cta, onClick, href, color, bg }) => {
+          const Body = (
+            <>
+              <div className="flex items-start gap-3.5">
+                <div className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg}`}>
+                  <Icon className={`h-5 w-5 ${color}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-semibold text-text-primary">{title}</h4>
+                  <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-text-muted">
+                    {description}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h4 className="text-sm font-semibold text-text-primary">{title}</h4>
-                <p className="mt-1 text-sm text-text-muted">{description}</p>
-                {action && (
-                  <button
-                    type="button"
-                    onClick={openCreateDialog}
-                    className="mt-3 text-xs font-medium text-brand hover:underline"
-                  >
-                    {action} →
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
+              {cta ? (
+                <div className={`mt-4 inline-flex items-center gap-1.5 text-xs font-medium ${color} transition group-hover:gap-2`}>
+                  {cta}
+                  <ArrowRight className="h-3 w-3" />
+                </div>
+              ) : null}
+            </>
+          );
+
+          if (href) {
+            return (
+              <Link
+                key={title}
+                href={href}
+                className="group rounded-cards border border-border bg-surface p-5 transition hover:border-brand/40 hover:bg-surface-2"
+              >
+                {Body}
+              </Link>
+            );
+          }
+
+          return (
+            <button
+              key={title}
+              type="button"
+              onClick={onClick}
+              className="group rounded-cards border border-border bg-surface p-5 text-left transition hover:border-brand/40 hover:bg-surface-2"
+            >
+              {Body}
+            </button>
+          );
+        })}
       </div>
+
+      <p className="mt-6 flex items-center gap-2 text-[11px] text-text-muted">
+        <Mail className="h-3 w-3" />
+        Your private capture email and Telegram bot link are on the Integrations page.
+      </p>
     </div>
   );
 }

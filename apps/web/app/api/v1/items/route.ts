@@ -16,7 +16,11 @@ export async function GET(req: Request) {
   const collection = searchParams.get("collection") || "";
   const type = searchParams.get("type") || "";
   const cursor = searchParams.get("cursor") || "";
-  const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 50);
+  // Validate the limit param: parseInt of bad input returns NaN, which
+  // would propagate into the SQL LIMIT clause and error out. Clamp to a
+  // sane default + cap.
+  const parsedLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 20;
 
   const conditions = ["user_id = $1"];
   const params: unknown[] = [user.id];

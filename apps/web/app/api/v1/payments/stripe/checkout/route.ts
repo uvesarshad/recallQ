@@ -7,6 +7,7 @@ import {
 } from "@/lib/billing-stripe";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { rateLimit } from "@/lib/rate-limit";
 import { requireSessionUser } from "@/lib/request-auth";
 
 const requestSchema = z.object({
@@ -21,6 +22,18 @@ const requestSchema = z.object({
 export async function POST(req: Request) {
   const user = await requireSessionUser();
   if (!user) return apiError("Unauthorized", 401);
+
+  // Checkout sessions are cheap on our side but each creates a Stripe
+  // customer record and consumes API budget. Cap per-user to prevent a
+  // misbehaving client from creating hundreds of sessions.
+  const limit = await rateLimit({
+    key: `stripe-checkout:user:${user.id}`,
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!limit.allowed) {
+    return apiError("Too many checkout attempts. Wait an hour and try again.", 429);
+  }
 
   if (!isBillingEnabled()) {
     return apiError("Billing is disabled for self-hosted deployments", 400);

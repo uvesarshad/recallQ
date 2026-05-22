@@ -98,7 +98,13 @@ async function findOrCreateUser(
   }
 
   // 2. Link to existing email-based account.
-  if (identity.email) {
+  //
+  // We only auto-link when the provider has VERIFIED the email — otherwise
+  // an attacker who can register a provider account with someone else's
+  // unverified email could hijack their existing password-based account.
+  // Google + Apple always set this true, but the gate is defence-in-depth
+  // and protects against any future provider we add that doesn't.
+  if (identity.email && identity.emailVerified) {
     const existingUser = await db.query<{ id: string }>(
       `SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
       [identity.email],

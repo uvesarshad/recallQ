@@ -4,6 +4,7 @@ import { getStripeClient, isStripeEnabled } from "@/lib/billing-stripe";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
 import { requireSessionUser } from "@/lib/request-auth";
 
 // POST /api/v1/payments/stripe/portal
@@ -18,6 +19,17 @@ import { requireSessionUser } from "@/lib/request-auth";
 export async function POST(req: Request) {
   const user = await requireSessionUser();
   if (!user) return apiError("Unauthorized", 401);
+
+  // Stripe Portal session creation is cheap but still hits the Stripe API.
+  // Cap per-user so a stuck UI loop can't burn API budget.
+  const limit = await rateLimit({
+    key: `stripe-portal:user:${user.id}`,
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!limit.allowed) {
+    return apiError("Too many portal sessions. Wait an hour and try again.", 429);
+  }
 
   if (!isBillingEnabled()) {
     return apiError("Billing is disabled for self-hosted deployments", 400);
