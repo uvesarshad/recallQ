@@ -80,14 +80,21 @@ Columns:
 
 ## Outstanding follow-ups (Stage 5 → Stage 8)
 
-1. Rate limit the NextAuth credentials endpoint (`/api/auth/callback/credentials`) — mirror the IP + email limits from `/api/v1/auth/tokens`.
-2. Add `ChatRequestSchema` in `@recall/api-schema` and validate `/api/v1/chat` input.
-3. Add a 60/user/hour rate limit on `/api/v1/actions/preview` (every call hits Gemini).
-4. Move `/api/v1/items` POST to share the `ingest:user:<id>` rate-limit bucket with `/api/v1/ingest` and `/api/v1/ingest/file`.
-5. Rate-limit `/api/v1/user/telegram-link` and `/api/v1/user/telegram-token` (5/user/hour) — they mint one-time tokens.
-6. After 1-2 weeks of CSP Report-Only data, flip to enforcing.
-7. Migrate Razorpay checkout shim to a nonce-based CSP so we can drop `'unsafe-inline'` from `script-src`.
-8. Add a CORS allow-list for the Chrome extension origin once Stage 8 publishes a stable extension ID. Until then `/api/v1/*` is same-origin-only.
+### Applied 2026-05-22 (audit-todos sweep)
 
-AGENT OWNER: apps/web/lib/rate-limit.ts, apps/web/next.config.mjs
+- ✅ Rate-limited the NextAuth credentials authorize (`apps/web/lib/auth.ts`) — mirrors the `5/IP/15min + 10/email/hour` limits already on `POST /api/v1/auth/tokens`, separate bucket keys (`nextauth-credentials:ip:*`, `nextauth-credentials:email:*`) so a brute-force on one surface doesn't lock the other for the same user/IP.
+- ✅ `ChatRequestSchema` lives in `@recall/api-schema/src/chat.ts` and is validated via `parseBody` in `/api/v1/chat`. Extension and mobile clients can now import the same schema.
+- ✅ `POST /api/v1/actions/preview` is rate-limited 60/user/hour.
+- ✅ `POST /api/v1/ingest/file` now shares the same `ingest:user:<id>` bucket as `POST /api/v1/ingest` — clients can't multiplex between JSON and multipart ingest to double their allowance.
+- ✅ `POST /api/v1/user/telegram-token` is rate-limited 5/user/hour. (`/telegram-link` POST does not exist — only DELETE, which is idempotent and unauthenticated-attacker-irrelevant.)
+- ✅ `POST /api/v1/payments/create-subscription` is rate-limited 5/user/hour — local cap to short-circuit before we burn a Razorpay round-trip.
+- ✅ Hourly GC of stale `rate_limits` (> 1d old) + expired `password_reset_tokens` (> 7d past expiry) now runs from the reminder worker.
+- ✅ Razorpay shim migrated to a nonce-based CSP. Per-request nonce is generated in `apps/web/proxy.ts` for every HTML route, forwarded via `x-nonce` request header, attached to the inline theme `<Script>` in `app/layout.tsx`, and listed in `script-src 'nonce-XXX' 'strict-dynamic'`. `'unsafe-inline'` is kept as a fallback for browsers that don't honor `'strict-dynamic'`; modern browsers ignore it entirely.
+
+### Still deferred
+
+1. After 1-2 weeks of CSP Report-Only data in production, flip the header name from `Content-Security-Policy-Report-Only` to `Content-Security-Policy`.
+2. Add a CORS allow-list for the Chrome extension origin once Stage 8 publishes a stable extension ID. Until then `/api/v1/*` is same-origin-permissive.
+
+AGENT OWNER: apps/web/lib/rate-limit.ts, apps/web/proxy.ts, apps/web/next.config.mjs
 AGENT UPDATE: docs/security-audit.md

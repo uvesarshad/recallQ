@@ -1,5 +1,6 @@
 import { apiError, apiOk } from "@/lib/api";
 import { ingestItem } from "@/lib/ingest";
+import { rateLimit } from "@/lib/rate-limit";
 import { isAcceptedMimeType } from "@/lib/storage";
 import { requireIngestUser } from "@/lib/request-auth";
 
@@ -10,6 +11,18 @@ const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // hard server cap (plan limits en
 export async function POST(req: Request) {
   const user = await requireIngestUser(req);
   if (!user) return apiError("Unauthorized", 401);
+
+  // Share the same `ingest:user:<id>` bucket as POST /api/v1/ingest so a
+  // misbehaving client can't multiplex between JSON ingest and file ingest
+  // to double its allowance.
+  const burst = await rateLimit({
+    key: `ingest:user:${user.id}`,
+    limit: 60,
+    windowMs: 60 * 1000,
+  });
+  if (!burst.allowed) {
+    return apiError("Too many captures in a short window. Slow down.", 429);
+  }
 
   let formData: FormData;
   try {

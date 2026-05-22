@@ -1,8 +1,15 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { config as loadEnv } from "dotenv";
+import bundleAnalyzer from "@next/bundle-analyzer";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Set ANALYZE=true to get a per-route bundle flamegraph at .next/analyze/*.
+// `pnpm analyze` (or `pnpm --filter @recall/web analyze`) wires this up.
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 // Load .env from the monorepo workspace root so build/dev pick up DATABASE_URL,
 // AUTH_SECRET, etc. Production runtime gets env from systemd EnvironmentFile.
@@ -30,39 +37,9 @@ const LEGACY_API_DIRS = [
   "user",
 ].join("|");
 
-const IS_PROD = process.env.NODE_ENV === "production";
-
-// Content-Security-Policy. Starts in Report-Only mode so we can observe real
-// production traffic before enforcing — flip the header name to
-// `Content-Security-Policy` (without the `-Report-Only` suffix) once the
-// reports stop showing legitimate failures.
-//
-// Sources included:
-//   - 'self' for first-party scripts / styles / images / connects
-//   - https://checkout.razorpay.com + https://api.razorpay.com for billing
-//   - https://generativelanguage.googleapis.com for the in-browser Gemini SDK
-//     paths (server-side calls don't use the browser CSP)
-//   - data: + https: for images so item thumbnails from arbitrary scrapes
-//     render. Tighten to a remotePatterns whitelist in Stage 6 if needed.
-//   - 'unsafe-inline' on script-src is temporary for the Razorpay checkout
-//     shim; planned migration to a nonce-based policy is tracked in
-//     docs/security-audit.md.
-const CSP_POLICY = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
-  "connect-src 'self' https://api.razorpay.com https://generativelanguage.googleapis.com",
-  "img-src 'self' data: https:",
-  "style-src 'self' 'unsafe-inline'",
-  "font-src 'self' data:",
-  "frame-src https://api.razorpay.com https://checkout.razorpay.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
-
-// Headers applied to every response. The CSP is report-only in production;
-// the other headers are enforced everywhere because they're behaviorally safe.
+// CSP moved to apps/web/proxy.ts so it can be per-request with a fresh nonce
+// (Next.js can't emit dynamic headers from this config). Everything else here
+// is static enough to live alongside the build config.
 const SECURITY_HEADERS = [
   // 2-year HSTS preload (only meaningful behind HTTPS; CloudPanel handles the
   // TLS termination, so this is safe even during local HTTP dev — browsers
@@ -72,10 +49,6 @@ const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
-  {
-    key: IS_PROD ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy-Report-Only",
-    value: CSP_POLICY,
-  },
 ];
 
 /** @type {import('next').NextConfig} */
@@ -93,6 +66,18 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: SECURITY_HEADERS,
+      },
+      // Keep the PWA upgradeable — if the browser caches `/sw.js` or
+      // `/manifest.json` aggressively, users can get stuck on a stale shell
+      // for days. `no-cache` still allows conditional requests, so the
+      // bandwidth cost is a few bytes per page load.
+      {
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "no-cache" }],
+      },
+      {
+        source: "/manifest.json",
+        headers: [{ key: "Cache-Control", value: "no-cache" }],
       },
     ];
   },
@@ -126,4 +111,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

@@ -27,7 +27,8 @@
       "Bash(rm -rf node_modules apps/*/node_modules packages/*/node_modules pnpm-lock.yaml 2>&1; pnpm install 2>&1 | tail -5; echo \"---STORE---\"; ls node_modules/.pnpm | grep \"@types+react@\" 2>&1)",
       "Bash(pnpm --filter @recall/web typecheck)",
       "Bash(pnpm --filter @recall/web add jose@^6.0.0)",
-      "Bash(grep -nE \"limit \\\\?\\\\?|LIMIT \\\\\\\\\\\\$|LIMIT [0-9]+\" apps/web/app/api/v1/items/route.ts apps/web/lib/search.ts apps/web/lib/ingest.ts)"
+      "Bash(grep -nE \"limit \\\\?\\\\?|LIMIT \\\\\\\\\\\\$|LIMIT [0-9]+\" apps/web/app/api/v1/items/route.ts apps/web/lib/search.ts apps/web/lib/ingest.ts)",
+      "PowerShell($env:TEMP)"
     ],
     "additionalDirectories": [
       "E:\\Projects\\recallQ\\apps\\*"

@@ -1,9 +1,10 @@
+import { ChatRequestSchema } from "@recall/api-schema";
 import { streamArchiveAnswer } from "@/lib/archive-chat";
+import { parseBody } from "@/lib/api-response";
 import { db } from "@/lib/db";
 import { getChatQueryLimit } from "@/lib/plan-limits";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireSessionUser } from "@/lib/request-auth";
-import type { ChatMessagePayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -64,20 +65,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = (await req.json()) as { messages?: ChatMessagePayload[] };
-  const messages = body.messages ?? [];
-  const lastUserMessage = messages.filter((message) => message.role === "user").pop();
-
+  const parsed = await parseBody(req, ChatRequestSchema);
+  if (!parsed.ok) return parsed.response;
+  const lastUserMessage = parsed.data.messages
+    .filter((message) => message.role === "user")
+    .pop();
   if (!lastUserMessage) {
     return new Response("No user message found", { status: 400 });
   }
-
-  if (typeof lastUserMessage.content !== "string" || lastUserMessage.content.trim().length === 0) {
+  // The Zod schema already trims/length-checks each message, but the trimmed
+  // body could still be whitespace-only — reject that.
+  if (lastUserMessage.content.trim().length === 0) {
     return new Response("Message content is empty", { status: 400 });
-  }
-
-  if (lastUserMessage.content.length > 2000) {
-    return new Response("Message too long (max 2000 characters)", { status: 400 });
   }
 
   try {

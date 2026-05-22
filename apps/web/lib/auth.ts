@@ -9,6 +9,7 @@ import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config";
 import { getAppleProviderCredentials } from "@/lib/apple-secret";
 import { verifyPassword } from "@/lib/password";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 // Resolve the Apple `client_secret` JWT once at module load via top-level
 // await. NextAuth's Apple provider expects a synchronous string; the JWT
@@ -90,11 +91,33 @@ const nextAuth = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const email = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
 
         if (!email || !password) {
+          return null;
+        }
+
+        // Mirror the limits on POST /api/v1/auth/tokens so the cookie-session
+        // login path doesn't become the soft underbelly of credential stuffing.
+        // Separate bucket keys from the PAT mint route so a brute-force on one
+        // surface doesn't lock out the other for the same user/IP.
+        const ip = request instanceof Request ? getClientIp(request) : "unknown";
+        const ipLimit = await rateLimit({
+          key: `nextauth-credentials:ip:${ip}`,
+          limit: 5,
+          windowMs: 15 * 60 * 1000,
+        });
+        if (!ipLimit.allowed) {
+          return null;
+        }
+        const emailLimit = await rateLimit({
+          key: `nextauth-credentials:email:${email}`,
+          limit: 10,
+          windowMs: 60 * 60 * 1000,
+        });
+        if (!emailLimit.allowed) {
           return null;
         }
 

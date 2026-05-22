@@ -23,6 +23,47 @@ const CORS_HEADERS = {
   Vary: "Origin",
 } as const;
 
+const IS_PROD = process.env.NODE_ENV === "production";
+
+// Per-request CSP nonce so we can drop `'unsafe-inline'` from `script-src`.
+// `'strict-dynamic'` makes the browser trust any script the nonced script
+// loads transitively — that's what lets the Razorpay checkout shim
+// (`document.createElement('script')`) keep working without listing every
+// host explicitly. The nonce flows into the root layout via the `x-nonce`
+// request header so `next/script` and `next/document` attach it to inline
+// scripts.
+function buildCsp(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https: 'unsafe-inline'`,
+    "connect-src 'self' https://api.razorpay.com https://generativelanguage.googleapis.com",
+    "img-src 'self' data: https:",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
+    "frame-src https://api.razorpay.com https://checkout.razorpay.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+// NOTE on the script-src list: when `'strict-dynamic'` is honored by a
+// browser, it ignores host allowlists and `'unsafe-inline'` — only the
+// nonced script (and what it loads) executes. We keep `'unsafe-inline'` +
+// `https:` as a fallback for older browsers that don't understand
+// `'strict-dynamic'`; those browsers fall through and get the legacy
+// behavior. Modern browsers get the strict policy.
+
+function generateNonce(): string {
+  // Web Crypto is available in the Edge runtime.
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
@@ -37,12 +78,27 @@ export default auth((req) => {
     return response;
   }
 
-  // For /app/* the `authorized` callback in `lib/auth.config.ts` decides
-  // whether to redirect unauthenticated requests to /login. Returning
-  // undefined lets that default behavior run.
-  return undefined;
+  // HTML routes: attach a per-request CSP nonce. Stay in Report-Only mode
+  // until we've observed clean reports in production for a couple of weeks;
+  // the next P2 item is to flip the header name to enforcing.
+  const nonce = generateNonce();
+  const csp = buildCsp(nonce);
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-nonce", nonce);
+
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+  response.headers.set(
+    IS_PROD ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy-Report-Only",
+    csp,
+  );
+  return response;
 });
 
 export const config = {
-  matcher: ["/app/:path*", "/api/v1/:path*"],
+  // Exclude static assets and the service worker so we don't pay middleware
+  // cost on every chunk fetch. Everything else (including `/`, `/login`,
+  // `/app/*`, and `/api/v1/*`) goes through the middleware.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|sw.js|workbox-).*)"],
 };

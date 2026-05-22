@@ -10,7 +10,8 @@
     "test": "node --experimental-strip-types tests/run-tests.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "worker:enrich": "tsx --env-file=../../.env workers/enrichment-worker.ts",
-    "worker:reminders": "tsx --env-file=../../.env workers/reminder-worker.ts"
+    "worker:reminders": "tsx --env-file=../../.env workers/reminder-worker.ts",
+    "analyze": "cross-env ANALYZE=true next build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
@@ -43,12 +44,14 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "latest",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "latest",
     "@types/pg": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",
+    "cross-env": "^10.1.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "latest",
     "postcss": "latest",

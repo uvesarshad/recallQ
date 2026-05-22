@@ -2,6 +2,7 @@ import { apiError, apiOk } from "@/lib/api";
 import { BILLING_PLANS, createHostedSubscription, isBillingEnabled } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { rateLimit } from "@/lib/rate-limit";
 import { requireSessionUser } from "@/lib/request-auth";
 import { z } from "zod";
 
@@ -17,6 +18,17 @@ export async function POST(req: Request) {
 
   if (!isBillingEnabled()) {
     return apiError("Billing is disabled for self-hosted deployments", 400);
+  }
+
+  // Razorpay rate-limits us downstream, but a local cap short-circuits abuse
+  // before we burn an API round-trip. Matches the Stripe checkout limit.
+  const limit = await rateLimit({
+    key: `razorpay-create-sub:user:${user.id}`,
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!limit.allowed) {
+    return apiError("Too many subscription attempts. Wait an hour and try again.", 429);
   }
 
   const data = requestSchema.parse(await req.json());

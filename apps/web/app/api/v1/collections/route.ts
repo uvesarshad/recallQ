@@ -22,7 +22,14 @@ export async function GET() {
     [user.id]
   );
 
-  return apiOk({ collections: result.rows });
+  // The folder list almost never changes during a session, but the Feed
+  // reloads it on every render. Browser-private cache keeps the response out
+  // of any shared/CDN cache (it's user-scoped) while still saving the
+  // round-trip for 60s.
+  return apiOk(
+    { collections: result.rows },
+    { headers: { "Cache-Control": "private, max-age=60" } },
+  );
 }
 
 export async function POST(req: Request) {

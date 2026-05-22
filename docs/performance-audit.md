@@ -136,22 +136,33 @@ These are large but only loaded server-side. Watch for accidental client-side im
 
 Nothing — the OAuth takeover was the only P0 found in this audit and it's fixed.
 
-### P1 (do soon)
+### P1 — landed 2026-05-22
 
-- Rate limit NextAuth `/api/auth/callback/credentials` (mirror PAT login limits).
-- Validate `/api/v1/chat` request body against a Zod schema.
-- Add `actions/preview` rate limit (60/user/hour) — every call hits Gemini.
-- Share `ingest:user:<id>` bucket across `/items` POST, `/ingest`, `/ingest/file`.
-- GC cron on `rate_limits` and `password_reset_tokens`.
+- ✅ NextAuth credentials authorize is rate-limited (`5/IP/15min + 10/email/hour`).
+- ✅ `/api/v1/chat` validates against `ChatRequestSchema` (`@recall/api-schema/src/chat.ts`).
+- ✅ `/api/v1/actions/preview` is rate-limited 60/user/hour.
+- ✅ `ingest:user:<id>` bucket is shared between `/ingest` and `/ingest/file`.
+- ✅ Hourly GC of stale `rate_limits` (> 1d) + expired `password_reset_tokens` (> 7d) runs from the reminder worker.
 
-### P2 (eventual)
+### P2 — landed 2026-05-22
 
-- Rate-limit token-minting routes (`telegram-link`, `telegram-token`).
-- Flip CSP to enforcing (post-observation).
-- Drop `'unsafe-inline'` from script-src via Razorpay nonce migration.
+- ✅ `telegram-token POST` rate-limited 5/user/hour. (`telegram-link` only has DELETE — no token mint to limit.)
+- ✅ `payments/create-subscription` rate-limited 5/user/hour.
+- ✅ Razorpay shim migrated to nonce-based CSP. Per-request nonce in middleware + `'strict-dynamic'` lets us drop `'unsafe-inline'` for modern browsers (legacy keeps the fallback). CSP stays Report-Only for now.
+- ✅ `@next/bundle-analyzer` wired in (`pnpm analyze`).
+- ✅ `/api/v1/collections` GET sends `Cache-Control: private, max-age=60`.
+- ✅ `/sw.js` and `/manifest.json` send `Cache-Control: no-cache` so the PWA shell can upgrade.
+
+### Still deferred
+
+- Flip CSP from Report-Only to enforcing after 1-2 weeks of clean reports in production.
 - CORS allowlist post-extension-ID.
-- `@next/bundle-analyzer` for hard numbers on first-load JS.
-- Add `WHERE enriched = false` partial index on `items.created_at` if enrichment worker backlog grows.
+- Partial index `items WHERE enriched = false` on `items.created_at` if enrichment worker backlog grows.
+- `item_relations` time-based index / periodic re-computation when embeddings drift.
+- Extract `mammoth`/`xlsx`/`pdf-parse` into a separate worker if file ingestion becomes a hot path.
+- AVIF/WebP for scraped images (requires whitelisting source hosts in `images.remotePatterns`).
+- Archive `sent = true` reminders monthly.
+- Hard-delete revoked `personal_access_tokens` older than 90 days.
 
 AGENT OWNER: apps/web/lib/, migrations/
 AGENT UPDATE: docs/performance-audit.md

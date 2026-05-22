@@ -170,6 +170,33 @@ async function checkMonthlyReset() {
   }
 }
 
+let lastGcAt = 0;
+const GC_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+// Periodic cleanup of tables that accumulate stale rows. We piggyback on the
+// reminder worker's minute-resolution loop rather than introduce a separate
+// cron process — the reminder worker already runs as a supervised systemd
+// daemon, and this work is < 1 second of DB time even on a populated DB.
+async function checkHourlyGc() {
+  const now = Date.now();
+  if (now - lastGcAt < GC_INTERVAL_MS) return;
+  lastGcAt = now;
+  try {
+    const rl = await db.query(
+      `DELETE FROM rate_limits WHERE window_started_at < now() - interval '1 day'`,
+    );
+    const prt = await db.query(
+      `DELETE FROM password_reset_tokens WHERE expires_at < now() - interval '7 days'`,
+    );
+    logger.info("reminder", "Hourly GC swept", {
+      rate_limits_deleted: rl.rowCount ?? 0,
+      password_reset_tokens_deleted: prt.rowCount ?? 0,
+    });
+  } catch (err) {
+    logger.error("reminder", "Hourly GC failed", { error: String(err) });
+  }
+}
+
 async function startWorker() {
   installCrashHandlers("reminder");
   startHeartbeat("reminders");
@@ -187,6 +214,9 @@ async function startWorker() {
       
       // Check for monthly reset
       await checkMonthlyReset();
+
+      // Sweep stale rate-limit / password-reset rows once an hour.
+      await checkHourlyGc();
 
     } catch (err) {
       logger.error("reminder", "Batch failed", { error: String(err) });
