@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  CheckSquare2,
   Hash,
-  Plus,
   Search,
   Trash2,
   X,
@@ -12,6 +10,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import ItemCard from "@/components/ItemCard";
 import ItemDetailModal from "@/components/ItemDetailModal";
+import ControlBar from "@/components/ControlBar";
 import { openCreateDialog } from "@/components/CreateItemDialog";
 import {
   ARCHIVE_ITEM_CREATED_EVENT,
@@ -19,17 +18,8 @@ import {
   dispatchArchiveItemsChanged,
 } from "@/lib/archive-events";
 import { useFeedKeyboard } from "@/lib/use-feed-keyboard";
+import { useStoredState } from "@/lib/hooks";
 import type { ArchiveItem, CollectionRecord } from "@/lib/types";
-
-// Feed page client. Redesigned for the image-led, single-column dashboard:
-//   - No preset pills (they duplicated the filter dropdowns)
-//   - No list/grid toggle (one canonical card layout in ItemCard)
-//   - No right sidebar / folder customization panel — that lives in
-//     /app/settings/folders now. Inline "+ New folder" stays here for
-//     discoverability.
-//   - Centered max-w-3xl column on desktop. Cards take the full column
-//     width so previews can render large.
-//   - Active filters render as removable chips below the filter row.
 
 type FeedSort = "newest" | "oldest" | "title";
 type FeedType = "all" | "url" | "text" | "note" | "file";
@@ -57,13 +47,30 @@ const sourceOptions: Array<{ label: string; value: FeedSource }> = [
   { label: "Mobile", value: "mobile" },
 ];
 
-const sortOptions: Array<{ label: string; value: FeedSort }> = [
-  { label: "Newest", value: "newest" },
-  { label: "Oldest", value: "oldest" },
-  { label: "Title A–Z", value: "title" },
-];
-
 const VISIBLE_TAG_COUNT = 8;
+
+async function pollUntilEnriched(
+  itemId: string,
+  setItems: React.Dispatch<React.SetStateAction<FeedItem[]>>,
+) {
+  const maxAttempts = 20;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, Math.min(2000 * Math.pow(1.5, i), 30000)));
+    try {
+      const res = await fetch(`/api/items/${itemId}`);
+      if (!res.ok) break;
+      const data = (await res.json()) as { item?: FeedItem };
+      if (data.item?.enriched) {
+        setItems((prev) =>
+          prev.map((it) => (it.id === itemId ? { ...it, ...data.item! } : it)),
+        );
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+}
 
 export default function FeedPageClient({
   initialItems,
@@ -95,6 +102,20 @@ export default function FeedPageClient({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   const [tagsExpanded, setTagsExpanded] = useState(false);
+
+  // Masonry column count (persisted).
+  const [cols, setCols] = useStoredState("recall-cols", 4);
+
+  // Mobile detection.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 720);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const effectiveCols = isMobile ? 2 : cols;
 
   // Inline create folder.
   const [showFolderForm, setShowFolderForm] = useState(false);
@@ -152,6 +173,8 @@ export default function FeedPageClient({
         .then((data) => {
           if (!data.item) return;
           setItems((current) => [data.item!, ...current.filter((item) => item.id !== data.item!.id)]);
+          // Start polling until enrichment completes.
+          void pollUntilEnriched(itemId, setItems);
         })
         .catch(() => {
           setSurfaceError("A new item was saved, but the feed did not refresh automatically.");
@@ -456,8 +479,7 @@ export default function FeedPageClient({
   }, []);
 
   // Quick reminder ("tomorrow 9 AM") fires from the keyboard `r` shortcut on
-  // the focused card. Mirrors the same default the ItemCard hover button
-  // uses, but doesn't depend on the card being mounted in DOM with hover.
+  // the focused card.
   async function quickReminder(itemId: string) {
     const remindAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     remindAt.setHours(9, 0, 0, 0);
@@ -469,8 +491,7 @@ export default function FeedPageClient({
     dispatchArchiveItemsChanged();
   }
 
-  // Listen for `?` to toggle the keyboard help overlay. Kept inline since
-  // it doesn't fit the useFeedKeyboard shape (no item index in play).
+  // Listen for `?` to toggle the keyboard help overlay.
   useEffect(() => {
     function handler(event: KeyboardEvent) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -509,7 +530,7 @@ export default function FeedPageClient({
   const deactivateKeyboard = deactivateOnPointer;
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-8">
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "4px 18px 80px" }}>
       {/* Header */}
       {searchQuery ? (
         <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -537,67 +558,28 @@ export default function FeedPageClient({
         </div>
       )}
 
-      {/* Single filter row — sticky just below the AppShell header so the
-          user keeps controls in reach while scrolling through items. The
-          AppShell header is `sticky top-0` with z-40 inside the same scroll
-          parent; this lands at top-16 (64px) right below it. */}
-      <div className="sticky top-16 z-30 -mx-5 mb-3 bg-bg/85 px-5 py-2 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
-      <div className="flex flex-wrap items-center gap-2 rounded-buttons border border-border bg-surface px-3 py-2 text-sm">
-        <FilterSelect
-          label="Type"
-          value={typeFilter}
-          onChange={(v) => setTypeFilter(v as FeedType)}
-          options={typeOptions}
-        />
-        <span className="h-4 w-px bg-border-soft" aria-hidden="true" />
-        <FilterSelect
-          label="Source"
-          value={sourceFilter}
-          onChange={(v) => setSourceFilter(v as FeedSource)}
-          options={sourceOptions}
-        />
-        <span className="h-4 w-px bg-border-soft" aria-hidden="true" />
-        <FilterSelect
-          label="Folder"
-          value={selectedFolderId}
-          onChange={(v) => setSelectedFolderId(v)}
-          options={[
-            { label: "All folders", value: "" },
-            ...folderRecords.map((f) => ({ label: f.name, value: f.id })),
-          ]}
-        />
-        <span className="h-4 w-px bg-border-soft" aria-hidden="true" />
-        <FilterSelect
-          label="Sort"
-          value={sort}
-          onChange={(v) => setSort(v as FeedSort)}
-          options={sortOptions}
-        />
-        <div className="ml-auto flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setShowFolderForm((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-buttons px-2.5 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text-primary"
-            title="Create a new folder"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Folder
-          </button>
-          <button
-            type="button"
-            onClick={() => (selectionMode ? resetSelection() : setSelectionMode(true))}
-            className={`inline-flex items-center gap-1.5 rounded-buttons px-2.5 py-1.5 text-xs transition ${
-              selectionMode
-                ? "bg-brand text-white"
-                : "text-text-muted hover:bg-surface-2 hover:text-text-primary"
-            }`}
-          >
-            <CheckSquare2 className="h-3.5 w-3.5" />
-            {selectionMode ? "Exit" : "Select"}
-          </button>
-        </div>
-      </div>
-      </div>
+      {/* ControlBar — replaces the old inline filter row */}
+      <ControlBar
+        cols={cols}
+        setCols={setCols}
+        query=""
+        setQuery={() => undefined}
+        sort={sort}
+        setSort={(s) => setSort(s as FeedSort)}
+        folder={selectedFolderId}
+        setFolder={setSelectedFolderId}
+        source={sourceFilter === "all" ? "" : sourceFilter}
+        setSource={(v) => setSourceFilter(v === "" ? "all" : (v as FeedSource))}
+        itemType={typeFilter === "all" ? "" : typeFilter}
+        setItemType={(v) => setTypeFilter(v === "" ? "all" : (v as FeedType))}
+        selectionMode={selectionMode}
+        setSelectionMode={(v) => {
+          if (!v) resetSelection();
+          else setSelectionMode(true);
+        }}
+        onAddFolder={() => setShowFolderForm((prev) => !prev)}
+        folders={folderRecords}
+      />
 
       {/* Inline new folder form */}
       {showFolderForm ? (
@@ -799,62 +781,70 @@ export default function FeedPageClient({
         </div>
       ) : null}
 
-      {/* Items column */}
-      <div className="mt-8 space-y-4" onPointerMove={deactivateKeyboard}>
-        {filteredItems.map((item, index) => (
-          <ItemCard
-            key={item.id}
-            item={item}
-            index={index}
-            focused={keyboardActive && focusedIndex === index}
-            selectionMode={selectionMode}
-            selected={selectedIdSet.has(item.id)}
-            onOpen={(id) => setOpenItemId(id)}
-            onToggleSelect={toggleSelection}
-          />
-        ))}
-      </div>
-
-      {filteredItems.length === 0 ? (
-        <div className="mt-8 rounded-modals border border-border bg-surface p-10 text-center">
+      {/* Masonry grid */}
+      {filteredItems.length > 0 ? (
+        <div
+          style={{ columnCount: effectiveCols, columnGap: 14, marginTop: 6 }}
+          onPointerMove={deactivateKeyboard}
+        >
+          {filteredItems.map((item, index) => (
+            <div key={item.id} style={{ breakInside: "avoid", marginBottom: 14 }}>
+              <ItemCard
+                item={item}
+                index={index}
+                focused={keyboardActive && focusedIndex === index}
+                selectionMode={selectionMode}
+                selected={selectedIdSet.has(item.id)}
+                isMobile={isMobile}
+                onOpen={(id) => setOpenItemId(id)}
+                onToggleSelect={toggleSelection}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          style={{
+            textAlign: "center",
+            color: "var(--color-text-muted, #8b949e)",
+            fontSize: 14,
+            padding: "48px 0",
+          }}
+        >
+          {searchQuery
+            ? "No matches for that meaning. Try describing it differently."
+            : items.length === 0
+              ? "Nothing captured yet. Paste a link or jot a thought above to begin."
+              : "No items match the current filters."}
+          {!searchQuery && activeFilters.length > 0 ? (
+            <div style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                className="rounded-full bg-brand/10 px-4 py-1.5 text-sm text-brand"
+                onClick={() => {
+                  setTypeFilter("all");
+                  setSourceFilter("all");
+                  setSelectedTags([]);
+                  setSelectedFolderId("");
+                }}
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : null}
           {searchQuery ? (
-            <>
-              <Search className="mx-auto h-8 w-8 text-text-muted" />
-              <p className="mt-3 text-sm font-medium text-text-primary">
-                No matches for &ldquo;{searchQuery}&rdquo;
-              </p>
-              <p className="mt-1 text-xs text-text-muted">
-                Try fewer words, a different phrase, or clear the search to see your full archive.
-              </p>
+            <div style={{ marginTop: 16 }}>
               <button
                 type="button"
                 onClick={() => router.push("/app")}
-                className="mt-4 rounded-full bg-brand/10 px-4 py-1.5 text-sm text-brand"
+                className="rounded-full bg-brand/10 px-4 py-1.5 text-sm text-brand"
               >
                 Clear search
               </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-text-mid">No items match the current filters.</p>
-              {activeFilters.length > 0 ? (
-                <button
-                  type="button"
-                  className="mt-4 rounded-full bg-brand/10 px-4 py-1.5 text-sm text-brand"
-                  onClick={() => {
-                    setTypeFilter("all");
-                    setSourceFilter("all");
-                    setSelectedTags([]);
-                    setSelectedFolderId("");
-                  }}
-                >
-                  Clear all filters
-                </button>
-              ) : null}
-            </>
-          )}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      )}
 
       {hasMore ? (
         <div className="mt-8 flex justify-center">
@@ -932,34 +922,5 @@ export default function FeedPageClient({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: ReadonlyArray<{ label: string; value: string }>;
-}) {
-  return (
-    <label className="inline-flex items-center gap-1.5 text-xs text-text-muted">
-      <span>{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="bg-transparent text-text-primary outline-none focus-visible:rounded-buttons"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value} className="bg-surface text-text-primary">
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }

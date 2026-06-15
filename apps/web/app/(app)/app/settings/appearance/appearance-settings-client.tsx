@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useStoredState } from "@/lib/hooks";
 import {
@@ -10,12 +10,35 @@ import {
   isThemePreference,
   type ThemePreference,
 } from "@/lib/theme";
+import { T, FONT } from "@recall/tokens";
 
 const options: { value: ThemePreference; label: string; description: string; Icon: React.ElementType }[] = [
   { value: "dark", label: "Dark", description: "Always use the dark palette.", Icon: Moon },
   { value: "light", label: "Light", description: "Always use the light palette.", Icon: Sun },
   { value: "system", label: "System", description: "Follow your OS preference automatically.", Icon: Monitor },
 ];
+
+const glassCard: React.CSSProperties = {
+  borderRadius: 20,
+  overflow: "hidden",
+  background: "rgba(255,255,255,.62)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  border: "1px solid " + T.glassEdge,
+  boxShadow: T.shadowSoft,
+  marginBottom: 18,
+};
+
+const sectionLabel: React.CSSProperties = {
+  padding: "14px 18px",
+  fontFamily: FONT,
+  fontSize: 12,
+  fontWeight: 700,
+  color: T.inkFaint,
+  textTransform: "uppercase",
+  letterSpacing: ".6px",
+  borderBottom: "1px solid " + T.line,
+};
 
 export default function AppearanceSettingsPage() {
   const [storedTheme, setTheme, hydrated] = useStoredState<ThemePreference | string>(THEME_STORAGE_KEY, DEFAULT_THEME);
@@ -36,12 +59,17 @@ export default function AppearanceSettingsPage() {
   }, [hydrated, theme]);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-modals border border-border bg-surface p-6">
-        <h1 className="text-lg font-semibold text-text-primary">Appearance</h1>
-        <p className="mt-1 text-sm text-text-muted">Choose how Recall looks on this device. This setting is stored in your browser.</p>
+    <div style={{ maxWidth: 620, margin: "0 auto", paddingBottom: 60 }}>
+      <h1 style={{ fontFamily: FONT, fontSize: 26, fontWeight: 800, color: T.ink, margin: "8px 0 4px" }}>
+        Appearance
+      </h1>
+      <p style={{ fontFamily: FONT, fontSize: 14, color: T.inkSoft, margin: "0 0 22px" }}>
+        Choose how Recall looks on this device. This setting is stored in your browser.
+      </p>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+      <div style={glassCard}>
+        <div style={sectionLabel}>Theme</div>
+        <div style={{ padding: "18px", display: "grid", gap: 12, gridTemplateColumns: "repeat(3, 1fr)" }}>
           {options.map(({ value, label, description, Icon }) => {
             const active = theme === value;
             return (
@@ -50,22 +78,46 @@ export default function AppearanceSettingsPage() {
                 type="button"
                 onClick={() => setTheme(value)}
                 aria-pressed={active}
-                className={`flex flex-col gap-3 rounded-cards border p-5 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                  active
-                    ? "border-brand bg-brand/5 shadow-sm"
-                    : "border-border bg-bg hover:border-brand/40 hover:bg-surface"
-                }`}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  padding: "18px 16px",
+                  borderRadius: 14,
+                  border: active ? "1.5px solid " + T.azure : "1.5px solid " + T.line,
+                  background: active
+                    ? "rgba(61,125,255,0.06)"
+                    : "rgba(255,255,255,0.5)",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: active ? "0 0 0 2px rgba(61,125,255,0.15)" : "none",
+                  outline: "none",
+                }}
               >
-                <Icon className={`h-5 w-5 ${active ? "text-brand" : "text-text-muted"}`} />
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  display: "grid",
+                  placeItems: "center",
+                  background: active ? "rgba(61,125,255,0.12)" : "rgba(11,18,32,0.05)",
+                }}>
+                  <Icon size={18} color={active ? T.azure : T.inkFaint} />
+                </div>
                 <div>
-                  <div className={`text-sm font-medium ${active ? "text-brand" : "text-text-primary"}`}>{label}</div>
-                  <div className="mt-0.5 text-xs text-text-muted">{description}</div>
+                  <div style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700, color: active ? T.azure : T.ink }}>
+                    {label}
+                  </div>
+                  <div style={{ fontFamily: FONT, fontSize: 12, color: T.inkSoft, marginTop: 2 }}>
+                    {description}
+                  </div>
                 </div>
               </button>
             );
           })}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

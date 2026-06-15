@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -18,54 +19,102 @@
   --color-item-file: var(--app-item-file);
   --color-item-media: var(--app-item-media);
   --color-item-reminder: var(--app-item-reminder);
+  /* Glass design token aliases */
+  --color-wash: var(--tk-wash);
+  --color-azure: var(--tk-azure);
+  --color-azure-deep: var(--tk-azure-deep);
+  --color-mint: var(--tk-mint);
+  --color-ink: var(--tk-ink);
+  --color-ink-soft: var(--tk-ink-soft);
+  --color-ink-faint: var(--tk-ink-faint);
+  --color-glass: var(--tk-glass);
+  --color-glass-edge: var(--tk-glass-edge);
+  --color-line: var(--tk-line);
+  --font-jakarta: "'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif";
   --font-inter: "Inter", sans-serif;
-  --font-geist-mono: "Geist Mono", monospace;
+  --font-geist-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
   --radius-cards: 10px;
   --radius-modals: 14px;
   --radius-buttons: 8px;
   --radius-input: 8px;
   --radius-canvas: 12px;
+  --shadow-soft: var(--tk-shadow-soft);
+  --shadow: var(--tk-shadow);
+  --shadow-lift: var(--tk-shadow-lift);
 }
 
+/* ── Light mode (default) ─────────────────────────────────── */
 :root,
-html[data-theme="dark"] {
-  --app-bg: #0f0f11;
-  --app-surface: #18181b;
-  --app-surface-2: #27272a;
-  --app-border: #3f3f46;
-  --app-border-soft: #27272a;
-  --app-text-primary: #fafafa;
-  --app-text-mid: #a1a1aa;
-  --app-text-muted: #71717a;
-  --app-brand: #6366f1;
-  --app-brand-hover: #818cf8;
-  --app-brand-dim: #312e81;
-  --app-brand-glow: rgba(99, 102, 241, 0.15);
-  --app-item-link: #38bdf8;
-  --app-item-note: #84cc16;
+html[data-theme="light"] {
+  /* App semantic colors */
+  --app-bg: #F7F9FC;
+  --app-surface: rgba(255,255,255,0.62);
+  --app-surface-2: #EEF2F8;
+  --app-border: rgba(255,255,255,0.75);
+  --app-border-soft: rgba(11,18,32,0.07);
+  --app-text-primary: #0B1220;
+  --app-text-mid: #5A6478;
+  --app-text-muted: #9AA4B8;
+  --app-brand: #3D7DFF;
+  --app-brand-hover: #2B5FD9;
+  --app-brand-dim: rgba(61,125,255,0.1);
+  --app-brand-glow: rgba(61,125,255,0.32);
+  --app-item-link: #3D7DFF;
+  --app-item-note: #22C9A8;
   --app-item-file: #fb923c;
   --app-item-media: #e879f9;
   --app-item-reminder: #facc15;
+  /* Glass token primitives */
+  --tk-wash: #F7F9FC;
+  --tk-azure: #3D7DFF;
+  --tk-azure-deep: #2B5FD9;
+  --tk-mint: #22C9A8;
+  --tk-ink: #0B1220;
+  --tk-ink-soft: #5A6478;
+  --tk-ink-faint: #9AA4B8;
+  --tk-line: rgba(11,18,32,0.07);
+  --tk-glass: rgba(255,255,255,0.55);
+  --tk-glass-edge: rgba(255,255,255,0.75);
+  --tk-shadow-soft: 0 2px 12px rgba(17,34,68,0.06);
+  --tk-shadow: 0 8px 30px rgba(17,34,68,0.08);
+  --tk-shadow-lift: 0 18px 50px rgba(17,34,68,0.16);
+  --app-header-bg: rgba(247,249,252,0.6);
 }
 
-html[data-theme="light"] {
-  --app-bg: #f4f4f1;
-  --app-surface: #ffffff;
-  --app-surface-2: #f0efe8;
-  --app-border: #d7d1c6;
-  --app-border-soft: #ebe6dc;
-  --app-text-primary: #171717;
-  --app-text-mid: #4b5563;
-  --app-text-muted: #6b7280;
-  --app-brand: #2f5bea;
-  --app-brand-hover: #2449be;
-  --app-brand-dim: #dbe7ff;
-  --app-brand-glow: rgba(47, 91, 234, 0.18);
-  --app-item-link: #0284c7;
-  --app-item-note: #65a30d;
-  --app-item-file: #ea580c;
-  --app-item-media: #db2777;
-  --app-item-reminder: #ca8a04;
+/* ── Dark mode ────────────────────────────────────────────── */
+html[data-theme="dark"] {
+  --app-bg: #0F0F13;
+  --app-surface: rgba(25,25,32,0.65);
+  --app-surface-2: #1A1B24;
+  --app-border: rgba(255,255,255,0.1);
+  --app-border-soft: rgba(240,242,248,0.07);
+  --app-text-primary: #F0F2F8;
+  --app-text-mid: #9AA4B8;
+  --app-text-muted: #5A6478;
+  --app-brand: #3D7DFF;
+  --app-brand-hover: #5B95FF;
+  --app-brand-dim: rgba(61,125,255,0.15);
+  --app-brand-glow: rgba(61,125,255,0.4);
+  --app-item-link: #5B95FF;
+  --app-item-note: #22C9A8;
+  --app-item-file: #fb923c;
+  --app-item-media: #e879f9;
+  --app-item-reminder: #facc15;
+  /* Glass token primitives (dark) */
+  --tk-wash: #0F0F13;
+  --tk-azure: #3D7DFF;
+  --tk-azure-deep: #2B5FD9;
+  --tk-mint: #22C9A8;
+  --tk-ink: #F0F2F8;
+  --tk-ink-soft: #9AA4B8;
+  --tk-ink-faint: #5A6478;
+  --tk-line: rgba(240,242,248,0.07);
+  --tk-glass: rgba(25,25,32,0.65);
+  --tk-glass-edge: rgba(255,255,255,0.1);
+  --tk-shadow-soft: 0 2px 12px rgba(0,0,0,0.24);
+  --tk-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  --tk-shadow-lift: 0 18px 50px rgba(0,0,0,0.48);
+  --app-header-bg: rgba(15,15,19,0.6);
 }
 
 :root,
@@ -128,11 +177,11 @@ html[data-theme="light"] {
 body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
-  font-family: var(--font-inter);
+  font-family: 'Plus Jakarta Sans', var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-word-smoothing: grayscale;
+  -moz-osx-font-smoothing: grayscale;
   transition: background-color 160ms ease, color 160ms ease;
 }
 
@@ -176,29 +225,96 @@ body {
   .landing-card {
     box-shadow: var(--landing-card-shadow);
   }
+
+  .shadow-soft {
+    box-shadow: var(--tk-shadow-soft);
+  }
+  .shadow-lift {
+    box-shadow: var(--tk-shadow-lift);
+  }
+
+  /* range input styling for the column slider */
+  input[type=range] {
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(11,18,32,0.12);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #3D7DFF;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(61,125,255,0.4);
+  }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(11,18,32,0.14); border-radius: 8px; }
 }
 
 @keyframes blob-spin {
-  from {
-    transform: rotate(0deg) scale(1) translate(0, 0);
-  }
-  to {
-    transform: rotate(360deg) scale(1.1) translate(20px, -20px);
-  }
+  from { transform: rotate(0deg) scale(1) translate(0, 0); }
+  to { transform: rotate(360deg) scale(1.1) translate(20px, -20px); }
 }
 
 @keyframes flow-line {
-  from {
-    stroke-dashoffset: 24;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
 }
 
 @keyframes pulse-ring {
   0% { transform: scale(0.8); opacity: 0.8; }
   100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* Glass design keyframes */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-14px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Blob drift animations (for Atmosphere component) */
+@keyframes f1 {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(60px, 80px); }
+}
+@keyframes f2 {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-70px, -50px); }
+}
+@keyframes f3 {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(40px, -60px); }
+}
+/* Shimmer for enriching cards */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, rgba(238,242,248,0) 0%, rgba(238,242,248,0.8) 50%, rgba(238,242,248,0) 100%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+/* prefers-reduced-motion: collapse springs to instant/opacity-only */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer utilities {

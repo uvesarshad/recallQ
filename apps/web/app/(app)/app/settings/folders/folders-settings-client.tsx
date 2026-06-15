@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Check, FolderCog, Plus, Trash2 } from "lucide-react";
 import type { CollectionRecord } from "@/lib/types";
+import { T, FONT } from "@recall/tokens";
 
 // Folder management — moved out of the Feed sidebar so the dashboard can
 // stay clean. Each row is edit-in-place: type a name, pick a color, set an
@@ -34,6 +35,40 @@ function makeDraft(folder: Folder): EditDraft {
     color: folder.color ?? FOLDER_COLORS[0],
   };
 }
+
+const glassCard: React.CSSProperties = {
+  borderRadius: 20,
+  overflow: "hidden",
+  background: "rgba(255,255,255,.62)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  border: "1px solid " + T.glassEdge,
+  boxShadow: T.shadowSoft,
+  marginBottom: 18,
+};
+
+const sectionLabel: React.CSSProperties = {
+  padding: "14px 18px",
+  fontFamily: FONT,
+  fontSize: 12,
+  fontWeight: 700,
+  color: T.inkFaint,
+  textTransform: "uppercase",
+  letterSpacing: ".6px",
+  borderBottom: "1px solid " + T.line,
+};
+
+const inputStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid " + T.line,
+  background: "rgba(255,255,255,0.7)",
+  fontFamily: FONT,
+  fontSize: 13.5,
+  color: T.ink,
+  outline: "none",
+  minWidth: 0,
+};
 
 export default function FoldersSettingsClient() {
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -172,32 +207,28 @@ export default function FoldersSettingsClient() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-modals border border-border bg-surface p-6">
-        <div className="flex items-center gap-3">
-          <div className="inline-flex h-9 w-9 items-center justify-center rounded-buttons bg-brand/10 text-brand">
-            <FolderCog className="h-4 w-4" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-text-primary">Folders</h1>
-            <p className="text-sm text-text-muted">
-              Group items into folders, then filter by folder on the dashboard.
-            </p>
-          </div>
+    <div style={{ maxWidth: 620, margin: "0 auto", paddingBottom: 60 }}>
+      <h1 style={{ fontFamily: FONT, fontSize: 26, fontWeight: 800, color: T.ink, margin: "8px 0 4px" }}>
+        Folders
+      </h1>
+      <p style={{ fontFamily: FONT, fontSize: 14, color: T.inkSoft, margin: "0 0 22px" }}>
+        Group items into folders, then filter by folder on the dashboard.
+      </p>
+
+      {/* Header / error banner */}
+      {error ? (
+        <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 10, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.2)", fontFamily: FONT, fontSize: 13, color: "#E11D48" }}>
+          {error}
         </div>
+      ) : null}
 
-        {error ? (
-          <p className="mt-4 rounded-buttons border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-            {error}
-          </p>
-        ) : null}
-      </section>
-
-      <section className="rounded-modals border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted">
-          New folder
-        </h2>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+      {/* New folder */}
+      <div style={glassCard}>
+        <div style={sectionLabel}>New folder</div>
+        <div style={{ padding: "18px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", background: "rgba(61,125,255,.1)", flexShrink: 0 }}>
+            <FolderCog size={18} color={T.azure} />
+          </div>
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -205,45 +236,77 @@ export default function FoldersSettingsClient() {
               if (e.key === "Enter") void createFolder();
             }}
             placeholder="Folder name"
-            className="flex-1 min-w-[220px] rounded-input border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-brand"
+            style={{ ...inputStyle, flex: 1, minWidth: 180 }}
           />
           <ColorSwatches value={newColor} onChange={setNewColor} />
           <button
             type="button"
             onClick={() => void createFolder()}
             disabled={!newName.trim() || creating}
-            className="inline-flex items-center gap-2 rounded-buttons bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 16px",
+              borderRadius: 10,
+              border: "none",
+              background: !newName.trim() || creating
+                ? "rgba(11,18,32,0.08)"
+                : "linear-gradient(120deg," + T.azure + "," + T.mint + ")",
+              color: !newName.trim() || creating ? T.inkFaint : "#fff",
+              fontFamily: FONT,
+              fontSize: 13.5,
+              fontWeight: 700,
+              cursor: !newName.trim() || creating ? "not-allowed" : "pointer",
+            }}
           >
-            <Plus className="h-4 w-4" />
-            {creating ? "Creating…" : "Create"}
+            <Plus size={15} />
+            {creating ? "Creating..." : "Create"}
           </button>
         </div>
-      </section>
+      </div>
 
-      <section className="rounded-modals border border-border bg-surface">
-        <div className="border-b border-border px-6 py-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted">
-            Your folders {folders.length > 0 ? `(${folders.length})` : ""}
-          </h2>
+      {/* Folder list */}
+      <div style={glassCard}>
+        <div style={sectionLabel}>
+          Your folders{folders.length > 0 ? ` (${folders.length})` : ""}
         </div>
 
         {loading ? (
-          <p className="px-6 py-8 text-sm text-text-muted">Loading folders…</p>
+          <div style={{ padding: "24px 18px", fontFamily: FONT, fontSize: 14, color: T.inkFaint }}>
+            Loading folders...
+          </div>
         ) : folders.length === 0 ? (
-          <p className="px-6 py-8 text-sm text-text-muted">
+          <div style={{ padding: "24px 18px", fontFamily: FONT, fontSize: 14, color: T.inkFaint }}>
             No folders yet. Create one above, or from the dashboard&apos;s &ldquo;+ Folder&rdquo; button.
-          </p>
+          </div>
         ) : (
-          <ul className="divide-y divide-border">
-            {folders.map((folder) => {
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {folders.map((folder, idx) => {
               const draft = drafts[folder.id] ?? makeDraft(folder);
               const dirty = hasChanges.has(folder.id);
               return (
-                <li key={folder.id} className="px-6 py-4">
-                  <div className="flex flex-wrap items-center gap-3">
+                <li
+                  key={folder.id}
+                  style={{
+                    padding: "14px 18px",
+                    borderBottom: idx < folders.length - 1 ? "1px solid " + T.line : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
                     <span
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-buttons text-base"
-                      style={{ backgroundColor: `${draft.color}25`, color: draft.color }}
+                      style={{
+                        display: "inline-flex",
+                        width: 36,
+                        height: 36,
+                        flexShrink: 0,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 10,
+                        fontSize: 18,
+                        backgroundColor: `${draft.color}25`,
+                        color: draft.color,
+                      }}
                       aria-hidden="true"
                     >
                       {draft.icon || "📁"}
@@ -252,36 +315,64 @@ export default function FoldersSettingsClient() {
                       value={draft.name}
                       onChange={(e) => patchDraft(folder.id, { name: e.target.value })}
                       placeholder="Folder name"
-                      className="min-w-[200px] flex-1 rounded-input border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-brand"
+                      style={{ ...inputStyle, flex: 1, minWidth: 160 }}
                     />
                     <input
                       value={draft.icon}
                       onChange={(e) => patchDraft(folder.id, { icon: e.target.value })}
-                      placeholder="Icon (emoji or text)"
-                      className="w-[160px] rounded-input border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-brand"
+                      placeholder="Icon"
+                      style={{ ...inputStyle, width: 130 }}
                     />
                     <ColorSwatches
                       value={draft.color}
                       onChange={(color) => patchDraft(folder.id, { color })}
                     />
-                    <div className="ml-auto flex items-center gap-2">
+                    <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
                       <button
                         type="button"
                         onClick={() => void saveFolder(folder.id)}
                         disabled={!dirty || savingId === folder.id}
-                        className="inline-flex items-center gap-1.5 rounded-buttons bg-brand px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          border: "none",
+                          background: !dirty || savingId === folder.id
+                            ? "rgba(11,18,32,0.06)"
+                            : "linear-gradient(120deg," + T.azure + "," + T.mint + ")",
+                          color: !dirty || savingId === folder.id ? T.inkFaint : "#fff",
+                          fontFamily: FONT,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: !dirty || savingId === folder.id ? "not-allowed" : "pointer",
+                        }}
                       >
-                        <Check className="h-3.5 w-3.5" />
-                        {savingId === folder.id ? "Saving…" : "Save"}
+                        <Check size={13} />
+                        {savingId === folder.id ? "Saving..." : "Save"}
                       </button>
                       <button
                         type="button"
                         onClick={() => void deleteFolder(folder.id)}
                         disabled={deletingId === folder.id}
-                        className="inline-flex items-center gap-1.5 rounded-buttons border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20 disabled:opacity-40"
                         aria-label={`Delete ${folder.name}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(244,63,94,0.25)",
+                          background: "rgba(244,63,94,0.07)",
+                          color: "#E11D48",
+                          fontFamily: FONT,
+                          fontSize: 12,
+                          cursor: deletingId === folder.id ? "not-allowed" : "pointer",
+                          opacity: deletingId === folder.id ? 0.5 : 1,
+                        }}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </div>
@@ -290,9 +381,9 @@ export default function FoldersSettingsClient() {
             })}
           </ul>
         )}
-      </section>
+      </div>
 
-      <p className="text-xs text-text-muted">
+      <p style={{ fontFamily: FONT, fontSize: 12, color: T.inkFaint }}>
         Deleting a folder unlinks every item from it. The items themselves stay in your archive.
       </p>
     </div>
@@ -301,7 +392,7 @@ export default function FoldersSettingsClient() {
 
 function ColorSwatches({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   return (
-    <div role="radiogroup" aria-label="Folder color" className="flex items-center gap-1.5">
+    <div role="radiogroup" aria-label="Folder color" style={{ display: "flex", alignItems: "center", gap: 5 }}>
       {FOLDER_COLORS.map((color) => {
         const active = value === color;
         return (
@@ -311,14 +402,21 @@ function ColorSwatches({ value, onChange }: { value: string; onChange: (color: s
             role="radio"
             aria-checked={active}
             onClick={() => onChange(color)}
-            className={`h-6 w-6 rounded-full transition ${
-              active ? "ring-2 ring-offset-2 ring-offset-surface" : "opacity-70 hover:opacity-100"
-            }`}
-            style={{
-              backgroundColor: color,
-              boxShadow: active ? `0 0 0 2px ${color}` : undefined,
-            }}
             aria-label={`Color ${color}`}
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              border: "none",
+              cursor: "pointer",
+              backgroundColor: color,
+              opacity: active ? 1 : 0.6,
+              outline: active ? `2px solid ${color}` : "none",
+              outlineOffset: 2,
+              transition: "all 0.15s",
+              boxShadow: active ? `0 0 0 2px white, 0 0 0 4px ${color}` : "none",
+              padding: 0,
+            }}
           />
         );
       })}

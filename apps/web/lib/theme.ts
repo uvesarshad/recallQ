@@ -1,7 +1,7 @@
 export type ThemePreference = "dark" | "light" | "system";
 export type AppliedTheme = "dark" | "light";
 
-export const DEFAULT_THEME: ThemePreference = "dark";
+export const DEFAULT_THEME: ThemePreference = "light";
 export const THEME_STORAGE_KEY = "recall-theme";
 
 export function isThemePreference(value: unknown): value is ThemePreference {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { T, FONT } from "@recall/tokens";
 
 declare global {
   interface Window {
@@ -92,18 +93,32 @@ function UsageMeter({ label, used, max, unit }: { label: string; used: number; m
   const displayMax = isUnlimited ? "∞" : unit === "bytes" ? formatBytes(max) : max.toLocaleString();
 
   return (
-    <div className="rounded-cards border border-border bg-bg p-4">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs uppercase tracking-wide text-text-muted">{label}</span>
-        <span className="text-sm font-medium text-text-primary">
+    <div style={{
+      borderRadius: 14,
+      border: "1px solid " + T.line,
+      background: "rgba(255,255,255,0.5)",
+      padding: "14px 16px",
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 700, color: T.inkFaint, textTransform: "uppercase", letterSpacing: ".5px" }}>{label}</span>
+        <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: T.ink }}>
           {displayUsed} / {displayMax}
         </span>
       </div>
       {!isUnlimited && (
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border">
+        <div style={{ marginTop: 8, height: 5, width: "100%", overflow: "hidden", borderRadius: 99, background: T.line }}>
           <div
-            className={`h-full rounded-full transition-all ${pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-brand"}`}
-            style={{ width: `${pct}%` }}
+            style={{
+              height: "100%",
+              borderRadius: 99,
+              transition: "width 0.3s",
+              background: pct >= 90
+                ? "#EF4444"
+                : pct >= 70
+                  ? "#F59E0B"
+                  : "linear-gradient(90deg, " + T.azure + ", " + T.mint + ")",
+              width: `${pct}%`,
+            }}
           />
         </div>
       )}
@@ -126,6 +141,28 @@ async function ensureRazorpayScript() {
   });
 }
 
+const glassCard: React.CSSProperties = {
+  borderRadius: 20,
+  overflow: "hidden",
+  background: "rgba(255,255,255,.62)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  border: "1px solid " + T.glassEdge,
+  boxShadow: T.shadowSoft,
+  marginBottom: 18,
+};
+
+const sectionLabel: React.CSSProperties = {
+  padding: "14px 18px",
+  fontFamily: FONT,
+  fontSize: 12,
+  fontWeight: 700,
+  color: T.inkFaint,
+  textTransform: "uppercase",
+  letterSpacing: ".6px",
+  borderBottom: "1px solid " + T.line,
+};
+
 export default function BillingSettingsClient() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,8 +170,6 @@ export default function BillingSettingsClient() {
   const [cancelling, setCancelling] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Provider preference for new subscriptions. Persisted only in component
-  // state — the actual billing_provider on the user row is set at checkout time.
   const [preferredProvider, setPreferredProvider] = useState<BillingProvider>("razorpay");
 
   async function loadProfile() {
@@ -142,8 +177,6 @@ export default function BillingSettingsClient() {
     const res = await fetch("/api/me");
     const data = (await res.json()) as ProfileResponse;
     setProfile(data);
-    // Default the provider toggle to whichever is configured. Prefer Stripe
-    // when both are available — wider geographic coverage.
     const providers = data.billing.providers;
     if (providers) {
       if (providers.stripe) setPreferredProvider("stripe");
@@ -194,7 +227,6 @@ export default function BillingSettingsClient() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to start Stripe checkout");
     if (!data.url) throw new Error("Stripe did not return a checkout URL");
-    // Full-page redirect — Stripe Checkout requires its own origin.
     window.location.assign(data.url as string);
   }
 
@@ -248,17 +280,23 @@ export default function BillingSettingsClient() {
   }
 
   if (loading || !profile?.user) {
-    return <div className="rounded-modals border border-border bg-surface p-6 text-sm text-text-muted">Loading billing...</div>;
+    return (
+      <div style={{ ...glassCard, padding: "24px 18px", fontFamily: FONT, fontSize: 14, color: T.inkFaint }}>
+        Loading billing...
+      </div>
+    );
   }
 
   if (profile.billing.selfHosted) {
     return (
-      <section className="rounded-modals border border-border bg-surface p-6">
-        <h1 className="text-lg font-semibold text-text-primary">Billing</h1>
-        <p className="mt-2 text-sm text-text-muted">
-          This deployment is running in self-hosted mode. Paid plans and hosted usage limits are disabled here.
-        </p>
-      </section>
+      <div style={{ maxWidth: 620, margin: "0 auto", paddingBottom: 60 }}>
+        <h1 style={{ fontFamily: FONT, fontSize: 26, fontWeight: 800, color: T.ink, margin: "8px 0 4px" }}>Billing</h1>
+        <div style={glassCard}>
+          <div style={{ padding: "24px 18px", fontFamily: FONT, fontSize: 14, color: T.inkSoft }}>
+            This deployment is running in self-hosted mode. Paid plans and hosted usage limits are disabled here.
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -269,40 +307,59 @@ export default function BillingSettingsClient() {
   const hasPaidSubscription = currentPlan !== "free";
   const providers = profile.billing.providers ?? { razorpay: true, stripe: false };
   const bothProvidersAvailable = providers.razorpay && providers.stripe;
-  // Discriminator for the existing subscriber's manage flow.
   const subscribedProvider: BillingProvider | null =
     user.billing_provider ??
     (user.stripe_subscription_id ? "stripe" : user.razorpay_subscription_id ? "razorpay" : null);
 
   return (
-    <div className="space-y-6">
+    <div style={{ maxWidth: 620, margin: "0 auto", paddingBottom: 60 }}>
+      <h1 style={{ fontFamily: FONT, fontSize: 26, fontWeight: 800, color: T.ink, margin: "8px 0 4px" }}>
+        Billing
+      </h1>
+      <p style={{ fontFamily: FONT, fontSize: 14, color: T.inkSoft, margin: "0 0 22px" }}>
+        Manage your subscription and review usage.
+      </p>
+
+      {/* Usage */}
       {usage && (
-        <section className="rounded-modals border border-border bg-surface p-6">
-          <h2 className="text-lg font-semibold text-text-primary">Usage this period</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <div style={glassCard}>
+          <div style={sectionLabel}>Usage this period</div>
+          <div style={{ padding: "18px", display: "grid", gap: 12, gridTemplateColumns: "repeat(3, 1fr)" }}>
             <UsageMeter label="Saves this month" used={usage.saves_this_month} max={usage.max_saves_per_month} />
             <UsageMeter label="Storage used" used={usage.storage_used_bytes} max={usage.max_storage_bytes} unit="bytes" />
             <UsageMeter label="Chat queries today" used={usage.chat_queries_today} max={usage.max_chat_queries_per_day} />
           </div>
-        </section>
+        </div>
       )}
 
-      <section className="rounded-modals border border-border bg-surface p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold text-text-primary">Annual plans</h1>
-            <p className="mt-2 text-sm text-text-muted">
-              Hosted RecallQ uses annual billing. Webhooks update access automatically after a successful payment.
-            </p>
+      {/* Annual plans */}
+      <div style={glassCard}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, padding: "14px 18px", borderBottom: "1px solid " + T.line }}>
+          <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, color: T.inkFaint, textTransform: "uppercase", letterSpacing: ".6px" }}>
+            Annual plans
           </div>
-
           {bothProvidersAvailable && !hasPaidSubscription ? (
-            <div role="group" aria-label="Choose billing provider" className="inline-flex rounded-buttons border border-border bg-bg p-1 text-xs">
+            <div
+              role="group"
+              aria-label="Choose billing provider"
+              style={{ display: "inline-flex", borderRadius: 10, border: "1px solid " + T.line, background: "rgba(255,255,255,0.5)", padding: 3, gap: 2 }}
+            >
               <button
                 type="button"
                 aria-pressed={preferredProvider === "stripe"}
                 onClick={() => setPreferredProvider("stripe")}
-                className={`rounded-buttons px-3 py-1.5 transition ${preferredProvider === "stripe" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  fontFamily: FONT,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: preferredProvider === "stripe" ? "linear-gradient(120deg," + T.azure + "," + T.mint + ")" : "transparent",
+                  color: preferredProvider === "stripe" ? "#fff" : T.inkSoft,
+                  transition: "all 0.2s",
+                }}
               >
                 Pay with Stripe
               </button>
@@ -310,7 +367,18 @@ export default function BillingSettingsClient() {
                 type="button"
                 aria-pressed={preferredProvider === "razorpay"}
                 onClick={() => setPreferredProvider("razorpay")}
-                className={`rounded-buttons px-3 py-1.5 transition ${preferredProvider === "razorpay" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  fontFamily: FONT,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: preferredProvider === "razorpay" ? "linear-gradient(120deg," + T.azure + "," + T.mint + ")" : "transparent",
+                  color: preferredProvider === "razorpay" ? "#fff" : T.inkSoft,
+                  transition: "all 0.2s",
+                }}
               >
                 Pay with Razorpay
               </button>
@@ -318,7 +386,7 @@ export default function BillingSettingsClient() {
           ) : null}
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div style={{ padding: "18px", display: "grid", gap: 12, gridTemplateColumns: "repeat(3, 1fr)" }}>
           {planCards.map((plan) => {
             const isCurrent = currentPlan === plan.id;
             const isPaidPlan = plan.id === "starter" || plan.id === "pro";
@@ -330,37 +398,64 @@ export default function BillingSettingsClient() {
             const ctaLabel = isCurrent
               ? "Current plan"
               : submittingPlan === plan.id
-                ? preferredProvider === "stripe" ? "Opening Stripe…" : "Opening Razorpay…"
+                ? preferredProvider === "stripe" ? "Opening Stripe..." : "Opening Razorpay..."
                 : `Choose ${plan.title}`;
 
             return (
-              <div key={plan.id} className={`rounded-cards border p-5 ${isCurrent ? "border-brand bg-brand/5" : "border-border bg-bg"}`}>
-                <div className="flex items-start justify-between gap-3">
+              <div
+                key={plan.id}
+                style={{
+                  borderRadius: 14,
+                  border: isCurrent ? "1.5px solid " + T.azure : "1.5px solid " + T.line,
+                  background: isCurrent ? "rgba(61,125,255,0.06)" : "rgba(255,255,255,0.45)",
+                  padding: "16px",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                   <div>
-                    <h2 className="text-base font-semibold text-text-primary">{plan.title}</h2>
-                    <p className="mt-1 text-sm text-text-muted">{plan.price}</p>
+                    <div style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.ink }}>{plan.title}</div>
+                    <div style={{ fontFamily: FONT, fontSize: 13, color: T.inkSoft, marginTop: 2 }}>{plan.price}</div>
                   </div>
                   {isCurrent ? (
-                    <span className="rounded-full bg-brand px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    <span style={{ padding: "2px 8px", borderRadius: 99, background: "linear-gradient(120deg," + T.azure + "," + T.mint + ")", fontFamily: FONT, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: ".5px", whiteSpace: "nowrap" }}>
                       Current
                     </span>
                   ) : null}
                 </div>
-                <ul className="mt-4 space-y-2 text-sm text-text-muted">
+                <ul style={{ marginTop: 12, marginBottom: 0, paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
                   {plan.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
+                    <li key={feature} style={{ fontFamily: FONT, fontSize: 12.5, color: T.inkSoft, paddingLeft: 0 }}>
+                      {feature}
+                    </li>
                   ))}
                 </ul>
                 {isPaidPlan ? (
                   <button
                     onClick={() => startCheckout(plan.id)}
                     disabled={disabled}
-                    className="mt-5 w-full rounded-buttons bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{
+                      marginTop: 14,
+                      width: "100%",
+                      padding: "9px 0",
+                      borderRadius: 10,
+                      border: "none",
+                      background: disabled
+                        ? "rgba(11,18,32,0.08)"
+                        : "linear-gradient(120deg," + T.azure + "," + T.mint + ")",
+                      color: disabled ? T.inkFaint : "#fff",
+                      fontFamily: FONT,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      transition: "all 0.2s",
+                    }}
                   >
                     {ctaLabel}
                   </button>
                 ) : (
-                  <div className="mt-5 rounded-buttons border border-border px-4 py-2 text-center text-sm text-text-muted">
+                  <div style={{ marginTop: 14, padding: "9px 0", textAlign: "center", fontFamily: FONT, fontSize: 13, color: T.inkFaint }}>
                     Free tier
                   </div>
                 )}
@@ -370,55 +465,61 @@ export default function BillingSettingsClient() {
         </div>
 
         {!hasPaidSubscription && bothProvidersAvailable ? (
-          <p className="mt-4 text-xs text-text-muted">
+          <div style={{ padding: "0 18px 18px", fontFamily: FONT, fontSize: 12, color: T.inkFaint }}>
             Stripe accepts most international cards and offers a self-service portal for upgrades / invoices. Razorpay is the better fit for users in India (UPI, NetBanking).
-          </p>
+          </div>
         ) : null}
-      </section>
+      </div>
 
-      <section className="rounded-modals border border-border bg-surface p-6">
-        <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-text-primary">Subscription status</h2>
+      {/* Subscription status */}
+      <div style={glassCard}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid " + T.line }}>
+          <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, color: T.inkFaint, textTransform: "uppercase", letterSpacing: ".6px" }}>
+            Subscription status
+          </div>
           {subscribedProvider ? (
-            <span className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-mid">
+            <span style={{ padding: "2px 8px", borderRadius: 99, border: "1px solid " + T.line, background: "rgba(255,255,255,0.5)", fontFamily: FONT, fontSize: 10, fontWeight: 700, color: T.inkSoft, textTransform: "uppercase", letterSpacing: ".5px" }}>
               via {subscribedProvider}
             </span>
           ) : null}
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div className="rounded-cards border border-border bg-bg p-4">
-            <div className="text-xs uppercase tracking-wide text-text-muted">Plan</div>
-            <div className="mt-2 text-sm font-medium text-text-primary">{currentPlan}</div>
-          </div>
-          <div className="rounded-cards border border-border bg-bg p-4">
-            <div className="text-xs uppercase tracking-wide text-text-muted">Status</div>
-            <div className="mt-2 text-sm font-medium text-text-primary">{user.subscription_status || "free"}</div>
-          </div>
-          <div className="rounded-cards border border-border bg-bg p-4">
-            <div className="text-xs uppercase tracking-wide text-text-muted">Current period ends</div>
-            <div className="mt-2 text-sm font-medium text-text-primary">{currentEnd || "Not applicable"}</div>
-          </div>
-          <div className="rounded-cards border border-border bg-bg p-4">
-            <div className="text-xs uppercase tracking-wide text-text-muted">Cancellation</div>
-            <div className="mt-2 text-sm font-medium text-text-primary">
-              {user.subscription_cancel_at_cycle_end ? "Scheduled at period end" : "Active"}
+        <div style={{ padding: "18px", display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+          {[
+            { label: "Plan", value: currentPlan },
+            { label: "Status", value: user.subscription_status || "free" },
+            { label: "Current period ends", value: currentEnd || "Not applicable" },
+            { label: "Cancellation", value: user.subscription_cancel_at_cycle_end ? "Scheduled at period end" : "Active" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ borderRadius: 12, border: "1px solid " + T.line, background: "rgba(255,255,255,0.45)", padding: "12px 14px" }}>
+              <div style={{ fontFamily: FONT, fontSize: 11, fontWeight: 700, color: T.inkFaint, textTransform: "uppercase", letterSpacing: ".5px" }}>{label}</div>
+              <div style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.ink, marginTop: 6 }}>{value}</div>
             </div>
-          </div>
+          ))}
         </div>
 
         {hasPaidSubscription ? (
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div style={{ padding: "0 18px 18px", display: "flex", flexWrap: "wrap", gap: 8 }}>
             {subscribedProvider === "stripe" ? (
               <>
                 <button
                   onClick={openStripePortal}
                   disabled={portalLoading}
-                  className="rounded-buttons bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{
+                    padding: "9px 20px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: portalLoading ? "rgba(11,18,32,0.08)" : "linear-gradient(120deg," + T.azure + "," + T.mint + ")",
+                    color: portalLoading ? T.inkFaint : "#fff",
+                    fontFamily: FONT,
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    cursor: portalLoading ? "not-allowed" : "pointer",
+                  }}
                 >
-                  {portalLoading ? "Opening portal…" : "Manage subscription"}
+                  {portalLoading ? "Opening portal..." : "Manage subscription"}
                 </button>
-                <p className="w-full text-xs text-text-muted">
+                <p style={{ width: "100%", fontFamily: FONT, fontSize: 12, color: T.inkFaint, margin: "4px 0 0" }}>
                   Update your card, view invoices, switch plans, or cancel from Stripe&apos;s hosted portal.
                 </p>
               </>
@@ -426,7 +527,18 @@ export default function BillingSettingsClient() {
               <button
                 onClick={cancelSubscription}
                 disabled={cancelling}
-                className="rounded-buttons border border-border px-4 py-2 text-sm font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  padding: "9px 20px",
+                  borderRadius: 10,
+                  border: "1px solid " + T.line,
+                  background: "transparent",
+                  color: T.ink,
+                  fontFamily: FONT,
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: cancelling ? "not-allowed" : "pointer",
+                  opacity: cancelling ? 0.6 : 1,
+                }}
               >
                 {cancelling ? "Cancelling..." : "Cancel at period end"}
               </button>
@@ -434,8 +546,12 @@ export default function BillingSettingsClient() {
           </div>
         ) : null}
 
-        {error ? <p className="mt-4 text-sm text-red-500">{error}</p> : null}
-      </section>
+        {error ? (
+          <div style={{ margin: "0 18px 18px", fontFamily: FONT, fontSize: 13, color: "#EF4444" }}>
+            {error}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

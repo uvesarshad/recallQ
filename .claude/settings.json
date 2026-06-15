@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Bash(Move-Item \"e:\\\\Projects\\\\recallQ\\\\app\\\\\\(app\\)\\\\settings\\\\appearance\\\\page.tsx\" \"e:\\\\Projects\\\\recallQ\\\\app\\\\\\(app\\)\\\\settings\\\\appearance\\\\appearance-settings-client.tsx\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); ['next-auth','@auth/pg-adapter','next'].forEach\\(k=>console.log\\(k,p.dependencies[k]||p.devDependencies?.[k]\\)\\)\")",

@@ -54,7 +54,7 @@ const SECURITY_HEADERS = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  transpilePackages: ["@recall/api-schema"],
+  transpilePackages: ["@recall/api-schema", "@recall/tokens", "@recall/ui"],
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },

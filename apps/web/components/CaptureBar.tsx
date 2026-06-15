@@ -1,21 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Plus } from "lucide-react";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { dispatchArchiveItemCreated } from "@/lib/archive-events";
+import { T, FONT } from "@recall/tokens";
 
 export default function CaptureBar() {
   const [value, setValue] = useState("");
+  const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
   const router = useRouter();
+
+  const active = focused || value.length > 0;
 
   useEffect(() => {
     if (status === "idle") {
       return;
     }
-
     const timeout = window.setTimeout(() => setStatus("idle"), 2400);
     return () => window.clearTimeout(timeout);
   }, [status]);
@@ -65,36 +69,106 @@ export default function CaptureBar() {
     }
   }
 
+  const placeholder =
+    status === "saved"
+      ? "Saved! Enrichment queued."
+      : status === "error"
+        ? "Save failed — try again."
+        : "Paste a link or jot a thought…";
+
   return (
-    <form
-      onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
-      className="flex items-center gap-3 rounded-input border border-border bg-surface px-4 py-2.5 transition-all focus-within:border-brand"
+    <motion.div
+      animate={{ scale: active ? 1.012 : 1 }}
+      transition={{ type: "spring", stiffness: 280, damping: 26 }}
+      style={{ width: "100%", maxWidth: 640 }}
     >
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center text-text-muted">
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-      </div>
-      <input
-        type="text"
-        placeholder={
-          status === "saved" ? "Saved. Enrichment queued." :
-          status === "error" ? "Save failed — try again." :
-          "Paste a link or write a note…"
-        }
-        className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        disabled={loading}
-      />
-      {value.trim() ? (
-        <span className="shrink-0 text-[11px] text-text-muted">{value.trim().match(/^https?:\/\//) ? "Link" : "Note"}</span>
-      ) : null}
-      <button
-        type="submit"
-        disabled={loading || !value.trim()}
-        className="shrink-0 rounded-buttons bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-hover disabled:opacity-40"
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          height: 50,
+          borderRadius: 16,
+          background: T.glass,
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          border: active
+            ? "1px solid rgba(61,125,255,.5)"
+            : `1px solid ${T.glassEdge}`,
+          boxShadow: active
+            ? `0 0 0 4px rgba(61,125,255,.12), ${T.shadowSoft}`
+            : T.shadowSoft,
+          padding: "0 8px 0 14px",
+          transition:
+            "border 0.2s, box-shadow 0.2s",
+        }}
       >
-        Save
-      </button>
-    </form>
+        <Sparkles
+          size={18}
+          style={{
+            flexShrink: 0,
+            color: active ? T.azure : T.inkFaint,
+            transition: "color 0.3s",
+          }}
+        />
+
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleSave();
+            }
+          }}
+          disabled={loading}
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            fontFamily: FONT,
+            fontSize: 15,
+            color: T.ink,
+            minWidth: 0,
+          }}
+        />
+
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.96 }}
+          onClick={() => void handleSave()}
+          disabled={loading || !value.trim()}
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            height: 38,
+            padding: "0 16px",
+            borderRadius: 12,
+            border: "none",
+            background: active
+              ? "linear-gradient(120deg,#3D7DFF,#22C9A8)"
+              : "linear-gradient(120deg,#3D7DFF,#3D7DFF)",
+            color: "white",
+            fontFamily: FONT,
+            fontWeight: 600,
+            fontSize: 14,
+            boxShadow: "0 6px 16px rgba(61,125,255,.32)",
+            cursor: loading || !value.trim() ? "not-allowed" : "pointer",
+            opacity: loading || !value.trim() ? 0.5 : 1,
+            transition: "background 0.3s, opacity 0.2s",
+          }}
+        >
+          <Plus size={16} />
+          Capture
+        </motion.button>
+      </div>
+    </motion.div>
   );
 }
