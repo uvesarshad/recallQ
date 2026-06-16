@@ -18,6 +18,11 @@ export async function GET(req: Request) {
   const collection = searchParams.get("collection") || "";
   const type = searchParams.get("type") || "";
   const cursor = searchParams.get("cursor") || "";
+  // Delta-sync mode: when `since` (ISO timestamp) is present, return items
+  // changed after it, oldest-first, so the extension can pull cross-device
+  // changes incrementally. Advances by the last item's `updated_at`. (New +
+  // edited items only; server-side deletions need tombstones — deferred.)
+  const since = searchParams.get("since") || "";
   // Validate the limit param: parseInt of bad input returns NaN, which
   // would propagate into the SQL LIMIT clause and error out. Clamp to a
   // sane default + cap.
@@ -52,13 +57,21 @@ export async function GET(req: Request) {
     paramIndex++;
   }
 
-  if (cursor) {
+  if (since && !cursor) {
+    // Delta mode advances by timestamp, not item-id cursor.
+    conditions.push(`updated_at > $${paramIndex}`);
+    params.push(since);
+    paramIndex++;
+  } else if (cursor) {
     conditions.push(`created_at < (SELECT created_at FROM items WHERE id = $${paramIndex})`);
     params.push(cursor);
     paramIndex++;
   }
 
   const whereClause = conditions.join(" AND ");
+  // Delta pulls go oldest-first so the client can advance `since`; the normal
+  // feed stays newest-first.
+  const orderBy = since && !cursor ? "updated_at ASC" : "created_at DESC";
 
   const result = await db.query(
     `SELECT items.id,
@@ -86,14 +99,19 @@ export async function GET(req: Request) {
      FROM items
      LEFT JOIN collections ON collections.id = items.collection_id
      WHERE ${whereClause}
-     ORDER BY created_at DESC
+     ORDER BY ${orderBy}
      LIMIT $${paramIndex}`,
     [...params, limit + 1]
   );
 
   const hasMore = result.rows.length > limit;
   const items = hasMore ? result.rows.slice(0, limit) : result.rows;
-  const nextCursor = hasMore ? items[items.length - 1].id : null;
+  // In delta mode the cursor is the last item's updated_at; otherwise its id.
+  const nextCursor = hasMore
+    ? since && !cursor
+      ? items[items.length - 1].updated_at
+      : items[items.length - 1].id
+    : null;
 
   return apiOk({ items, nextCursor, hasMore });
 }

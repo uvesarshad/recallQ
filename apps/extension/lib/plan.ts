@@ -1,12 +1,13 @@
-// Reads the signed-in user's plan for client-side entitlement gating (settings
-// sync). Result is cached in `chrome.storage.session` with a short TTL so the
-// stateless service worker doesn't hit `/me` on every menu interaction.
+// Reads the signed-in user's plan to gate cloud sync. All users save unlimited
+// tabs locally for free; only saving to / syncing with the cloud is paid. The
+// result is cached in `chrome.storage.session` with a short TTL so the
+// stateless service worker doesn't hit `/me` on every save.
 //
-// This is a CLIENT-SIDE entitlement only — the synced data lives in the user's
-// own Google account (chrome.storage.sync), not RecallQ servers, so there's no
-// server cost to gate. The plan value itself is authoritative (it comes from
-// the server's `/api/v1/me`). See `canUseDeviceSync` in the web app's
-// `lib/plan-limits.ts` for the canonical tier definition.
+// The plan value is authoritative (from the server's `/api/v1/me`); the gate
+// itself runs client-side (a free client simply won't push). The server is the
+// real backstop — `ingestItem` still enforces plan save caps, so a tampered
+// client can't actually write past the free tier. See `canUseCloudSync` in the
+// web app's `lib/plan-limits.ts` for the canonical tier definition.
 
 import { apiClient } from "./client";
 
@@ -38,6 +39,6 @@ export async function getPlan(force = false): Promise<Plan> {
   }
 }
 
-export function canSyncSettings(plan: Plan): boolean {
+export function canUseCloudSync(plan: Plan): boolean {
   return plan !== "free";
 }

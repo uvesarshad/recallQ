@@ -57,7 +57,7 @@ pnpm + Turborepo. Web app at `apps/web/`. Future `apps/extension/` (WXT), `apps/
 - [apps/web/next.config.mjs](file:///e:/Projects/recallQ/apps/web/next.config.mjs) — Loads workspace `.env`, sets `turbopack.root`, hosts the legacy `/api/*` → `/api/v1/*` rewrite block.
 - [apps/web/proxy.ts](file:///e:/Projects/recallQ/apps/web/proxy.ts) — Combined middleware: NextAuth gate for `/app/*` + CORS preflight/headers for `/api/v1/*`.
 - [apps/web/app/extension/connect/page.tsx](file:///e:/Projects/recallQ/apps/web/app/extension/connect/page.tsx) — Session-authed token issuance bridge used by the Chrome extension's WebAuth flow.
-- [apps/extension/](file:///e:/Projects/recallQ/apps/extension/) — Chrome extension (WXT). "RecallQ" tab-management context menu in `entrypoints/background.ts` (tab ops in `lib/tabs.ts`), pinned-tab app in `entrypoints/app/`, popup in `entrypoints/popup/`. Plan-gated sync in `lib/settings.ts`+`lib/plan.ts`. See docs/modules/extension.md.
+- [apps/extension/](file:///e:/Projects/recallQ/apps/extension/) — Chrome extension (WXT), local-first. On-device archive in `lib/local-archive.ts` (unlimited, free, offline); two-way cloud sync (paid) in `lib/sync.ts`. "RecallQ" tab menu in `entrypoints/background.ts` (tab ops `lib/tabs.ts`), pinned-tab app `entrypoints/app/`, popup `entrypoints/popup/`. See docs/modules/extension.md.
 - [packages/api-client/src/index.ts](file:///e:/Projects/recallQ/packages/api-client/src/index.ts) — Typed REST client (`createRecallClient`) for non-web clients.
 - [PLAN.md](file:///e:/Projects/recallQ/PLAN.md) — v1 ecosystem plan (web + extension + mobile). Read before touching anything cross-cutting.
 

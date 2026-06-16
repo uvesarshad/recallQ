@@ -3,9 +3,9 @@
 // caches. All state lives in `chrome.storage` (`session` for the per-session
 // exclusion set + plan cache, `local`/`sync` for settings).
 
-import { apiClient } from "../lib/client";
-import { getStoredToken } from "../lib/auth-storage";
 import { forgetExcludedTab, isTabExcluded, toggleExcludedTab } from "../lib/exclusion";
+import { addText, addUrls } from "../lib/local-archive";
+import { runSync } from "../lib/sync";
 import {
   openOrFocusApp,
   selectedTabs,
@@ -120,29 +120,21 @@ async function handleMenuClick(
     return;
   }
 
-  // Everything below needs auth.
-  const token = await getStoredToken();
-  if (!token) {
-    notify("Sign in to RecallQ first");
-    await openOrFocusApp();
-    return;
-  }
-
+  // Saves are local-first — no auth required (works fully signed-out). A cloud
+  // sync runs afterward only when the user has enabled it on a paid plan.
   try {
     // Context-specific quick saves.
     if (id === MENU_SAVE_LINK && info.linkUrl) {
-      await apiClient.ingest.url({ url: info.linkUrl, source: "extension" });
+      await addUrls([{ url: info.linkUrl, title: null }]);
+      void runSync().catch(() => {});
       notify("Link saved to RecallQ");
       return;
     }
     if (id === MENU_SAVE_SELECTION) {
       const text = info.selectionText?.trim();
       if (!text) return;
-      await apiClient.ingest.text({
-        text,
-        capture_note: active?.url ?? null,
-        source: "extension",
-      });
+      await addText(text, active?.url ?? null);
+      void runSync().catch(() => {});
       notify("Selection saved to RecallQ");
       return;
     }
@@ -181,13 +173,10 @@ async function handleMenuClick(
 }
 
 function formatResult(result: SendResult): string {
-  if (result.sent === 0) return "Nothing sent";
-  const parts = [`Sent ${result.sent}`];
-  if (result.sent < result.total) parts[0] = `Sent ${result.sent} of ${result.total}`;
+  if (result.saved === 0) return "Nothing saved";
+  const parts = [`Saved ${result.saved}`];
   if (result.closed > 0) parts.push(`closed ${result.closed}`);
-  let msg = parts.join(" · ");
-  if (result.limitReached) msg += " · limit reached";
-  return msg;
+  return parts.join(" · ");
 }
 
 async function updateExcludeMenuTitle() {

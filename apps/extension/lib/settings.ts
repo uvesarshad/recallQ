@@ -1,57 +1,34 @@
-// Extension preferences. Stored in `chrome.storage.local` always (the
-// source-of-truth for the `syncEnabled` intent flag, available offline). When
-// sync is enabled (paid plans only — gated in the UI via `lib/plan.ts`),
-// settings are mirrored to `chrome.storage.sync`, which Chrome propagates
-// across the user's signed-in profiles. Reads prefer the synced copy so a
-// change on one device shows up on another.
+// Extension preferences, stored in `chrome.storage.local`. With the local-first
+// model, "sync" now means **cloud** sync (push the on-device archive to the
+// RecallQ server + pull cross-device changes back), which is the paid feature.
+// Free users save unlimited tabs locally with this off.
 
 export type ExtensionSettings = {
   // Close tabs after sending them to RecallQ (offload-and-clear). Default on —
   // the whole point of the bulk sends is to clear the window.
   closeTabsAfterSending: boolean;
-  // Optional default collection id new captures land in (null = inbox).
-  defaultCollectionId: string | null;
-  // Whether to sync these settings across devices (paid feature).
-  syncEnabled: boolean;
+  // Push the local archive to the cloud and pull cross-device changes (paid).
+  cloudSyncEnabled: boolean;
 };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   closeTabsAfterSending: true,
-  defaultCollectionId: null,
-  syncEnabled: false,
+  cloudSyncEnabled: false,
 };
 
 const SETTINGS_KEY = "recallq.settings";
 
-async function readArea(
-  area: chrome.storage.StorageArea,
-): Promise<Partial<ExtensionSettings> | null> {
-  const res = await area.get(SETTINGS_KEY);
-  const val = res[SETTINGS_KEY];
-  return val && typeof val === "object" ? (val as Partial<ExtensionSettings>) : null;
-}
-
 export async function getSettings(): Promise<ExtensionSettings> {
-  const local = (await readArea(chrome.storage.local)) ?? {};
-  const merged: ExtensionSettings = { ...DEFAULT_SETTINGS, ...local };
-  if (merged.syncEnabled) {
-    const synced = await readArea(chrome.storage.sync);
-    if (synced) return { ...merged, ...synced, syncEnabled: true };
-  }
-  return merged;
+  const res = await chrome.storage.local.get(SETTINGS_KEY);
+  const val = res[SETTINGS_KEY];
+  const stored = val && typeof val === "object" ? (val as Partial<ExtensionSettings>) : {};
+  return { ...DEFAULT_SETTINGS, ...stored };
 }
 
 export async function setSettings(
   patch: Partial<ExtensionSettings>,
 ): Promise<ExtensionSettings> {
-  const current = await getSettings();
-  const next: ExtensionSettings = { ...current, ...patch };
+  const next = { ...(await getSettings()), ...patch };
   await chrome.storage.local.set({ [SETTINGS_KEY]: next });
-  if (next.syncEnabled) {
-    await chrome.storage.sync.set({ [SETTINGS_KEY]: next });
-  } else {
-    // Sync just turned off — drop the synced copy so it stops propagating.
-    await chrome.storage.sync.remove(SETTINGS_KEY);
-  }
   return next;
 }

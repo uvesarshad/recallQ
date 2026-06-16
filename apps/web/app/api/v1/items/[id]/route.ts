@@ -1,6 +1,6 @@
 import { apiError, apiOk } from "@/lib/api";
 import { db } from "@/lib/db";
-import { requireSessionUser } from "@/lib/request-auth";
+import { requireSessionUser, requireUser } from "@/lib/request-auth";
 import { deleteFile } from "@/lib/storage";
 import { z } from "zod";
 
@@ -130,11 +130,13 @@ export async function PATCH(
   return apiOk({ success: true });
 }
 
+// Bearer-enabled so the extension can propagate local deletes to the cloud
+// during two-way sync. Ownership is enforced in SQL (`WHERE user_id = $2`).
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireSessionUser();
+  const user = await requireUser(req);
   if (!user) {
     return apiError("Unauthorized", 401);
   }

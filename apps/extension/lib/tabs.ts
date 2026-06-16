@@ -3,21 +3,17 @@
 // groupId) comes from the `chrome.tabs` / `chrome.tabGroups` APIs, keeping
 // per-page memory at zero.
 
-import type { IngestItemInput } from "@recall/api-client";
-import { apiClient } from "./client";
 import { getExcludedTabIds } from "./exclusion";
+import { addUrls } from "./local-archive";
 import { getSettings } from "./settings";
-
-// Server bulk ingest caps at 100 items per request (`bulkIngestPayloadSchema`).
-const CHUNK_SIZE = 100;
+import { runSync } from "./sync";
 
 export const APP_URL = chrome.runtime.getURL("app.html");
 
 export type SendResult = {
-  sent: number; // items the server accepted
+  saved: number; // tabs written to the local archive (added + de-duped updates)
   total: number; // capturable, non-excluded tabs targeted
   closed: number; // tabs removed afterward
-  limitReached: boolean; // plan save-cap hit mid-batch
 };
 
 type CapturableTab = chrome.tabs.Tab & { url: string };
@@ -48,8 +44,9 @@ async function preventEmptyWindows(closingIds: Set<number>): Promise<void> {
   }
 }
 
-// Sends a list of tabs to RecallQ in batched requests, then (optionally)
-// closes the ones that were accepted.
+// Saves a list of tabs to the local archive (unlimited, free, offline), kicks
+// off a cloud sync if it's enabled, then optionally closes the saved tabs.
+// No auth required — local save always works, even signed-out.
 export async function sendTabs(
   tabs: chrome.tabs.Tab[],
   opts: { closeAfter: boolean },
@@ -61,50 +58,29 @@ export async function sendTabs(
   );
 
   if (targets.length === 0) {
-    return { sent: 0, total: 0, closed: 0, limitReached: false };
+    return { saved: 0, total: 0, closed: 0 };
   }
 
-  const settings = await getSettings();
-  const sentTabIds: number[] = [];
-  let sent = 0;
-  let limitReached = false;
+  const { added, updated } = await addUrls(
+    targets.map((t) => ({ url: t.url, title: t.title ?? null })),
+  );
+  // Fire-and-forget cloud push/pull; no-ops when cloud sync is off.
+  void runSync().catch(() => {});
 
-  for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
-    const chunkTabs = targets.slice(i, i + CHUNK_SIZE);
-    const items: IngestItemInput[] = chunkTabs.map((t) => ({
-      type: "url",
-      raw_url: t.url,
-      title: t.title ?? null,
-      source: "extension",
-    }));
-    try {
-      const res = await apiClient.ingest.batch(items);
-      sent += res.count;
-      for (const t of chunkTabs) if (t.id != null) sentTabIds.push(t.id);
-    } catch (error) {
-      // Plan save-cap reached mid-batch — the server returns 402 with the
-      // count it managed to import. Close only those, then stop.
-      const details = (error as { details?: { imported_count?: number } }).details;
-      const imported = typeof details?.imported_count === "number" ? details.imported_count : 0;
-      sent += imported;
-      for (let k = 0; k < imported; k++) {
-        const t = chunkTabs[k];
-        if (t?.id != null) sentTabIds.push(t.id);
-      }
-      limitReached = true;
-      break;
+  let closed = 0;
+  const settings = await getSettings();
+  if (opts.closeAfter && settings.closeTabsAfterSending) {
+    const ids = targets
+      .map((t) => t.id)
+      .filter((id): id is number => id != null);
+    if (ids.length > 0) {
+      await preventEmptyWindows(new Set(ids));
+      await chrome.tabs.remove(ids);
+      closed = ids.length;
     }
   }
 
-  let closed = 0;
-  if (opts.closeAfter && settings.closeTabsAfterSending && sentTabIds.length > 0) {
-    const closingIds = new Set(sentTabIds);
-    await preventEmptyWindows(closingIds);
-    await chrome.tabs.remove(sentTabIds);
-    closed = sentTabIds.length;
-  }
-
-  return { sent, total: targets.length, closed, limitReached };
+  return { saved: added + updated, total: targets.length, closed };
 }
 
 // --- Tab list builders, each relative to the tab the menu was invoked on. ---

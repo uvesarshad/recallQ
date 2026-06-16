@@ -31,7 +31,7 @@ Columns:
 | `/api/v1/items` | POST | ✅ `requireIngestUser` | ✅ `ingestPayloadSchema` | ✅ via `ingestItem` | ⚠️ | Calls into `lib/ingest.ts` which checks plan limit. Add the same `ingest:user:<id>` rate-limit bucket here for consistency with `/ingest` (TODO). |
 | `/api/v1/items/[id]` | GET | ✅ `requireSessionUser` | 🔒 no body | 🔒 N/A | 🔒 N/A | Ownership filter in SQL (`WHERE user_id = $1`). |
 | `/api/v1/items/[id]` | PATCH | ✅ `requireSessionUser` | ✅ Zod | 🔒 N/A | ⚠️ | Per-user rate limit not applied; PATCH is cheap. Watch in logs. |
-| `/api/v1/items/[id]` | DELETE | ✅ `requireSessionUser` | 🔒 no body | 🔒 N/A | 🔒 N/A | Idempotent; ownership filter in SQL. |
+| `/api/v1/items/[id]` | DELETE | ✅ `requireUser` (session + bearer) | 🔒 no body | 🔒 N/A | 🔒 N/A | Bearer-enabled so the extension can propagate local deletes during two-way sync. Idempotent; ownership filter in SQL. |
 | `/api/v1/items/[id]/comments` | GET/POST | ✅ session | ✅ Zod on POST | 🔒 N/A | ⚠️ | POST is cheap. |
 | `/api/v1/items/[id]/related` | GET | ✅ session | 🔒 no body | 🔒 N/A | 🔒 N/A | Read-only ownership-filtered SELECT. |
 | `/api/v1/items/batch` | POST | ✅ `requireSessionUser` | ✅ Zod | 🔒 N/A | ⚠️ | Batch capped in code; rate limit deferred. |

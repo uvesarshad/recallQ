@@ -1,139 +1,140 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ListItem } from "@recall/api-client";
-import { apiClient } from "../../lib/client";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ARCHIVE_KEY,
+  addText,
+  addUrls,
+  getVisible,
+  search,
+  softDelete,
+  type LocalItem,
+} from "../../lib/local-archive";
 import {
   clearStoredAuth,
   getStoredAuth,
   type StoredAuth,
 } from "../../lib/auth-storage";
 import { signInWithRecallQ } from "../../lib/auth-flow";
-import { canSyncSettings, getPlan, type Plan } from "../../lib/plan";
+import { canUseCloudSync, getPlan, type Plan } from "../../lib/plan";
 import {
   DEFAULT_SETTINGS,
   getSettings,
   setSettings,
   type ExtensionSettings,
 } from "../../lib/settings";
+import { runSync } from "../../lib/sync";
 import { WEB_BASE_URL } from "../../lib/config";
 
 type View = "feed" | "settings";
 
 export function App() {
-  const [auth, setAuth] = useState<StoredAuth | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [view, setView] = useState<View>("feed");
+  const [auth, setAuth] = useState<StoredAuth | null>(null);
+  const [plan, setPlan] = useState<Plan>("free");
+  const [settings, setSettingsState] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      setAuth(await getStoredAuth());
-      setAuthLoading(false);
-    })();
+  const refreshMeta = useCallback(async () => {
+    const [a, s] = await Promise.all([getStoredAuth(), getSettings()]);
+    setAuth(a);
+    setSettingsState(s);
+    setPlan(a ? await getPlan() : "free");
+    setLoaded(true);
   }, []);
 
-  async function handleSignIn() {
-    try {
-      setAuth(await signInWithRecallQ());
-    } catch {
-      // Cancelled or failed — stay on the signed-out screen.
-    }
-  }
+  useEffect(() => {
+    void refreshMeta();
+  }, [refreshMeta]);
 
-  async function handleSignOut() {
-    await clearStoredAuth();
-    setAuth(null);
-  }
+  const cloudEnabled = Boolean(auth) && settings.cloudSyncEnabled && canUseCloudSync(plan);
 
-  if (authLoading) {
-    return <div className="app-loading">Loading…</div>;
-  }
-
-  if (!auth) {
-    return (
-      <div className="app-signedout">
-        <div className="signin-card">
-          <h1>RecallQ</h1>
-          <p>Sign in to browse, search, and capture your archive.</p>
-          <button className="primary" type="button" onClick={() => void handleSignIn()}>
-            Sign in with RecallQ
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!loaded) return <div className="app-loading">Loading…</div>;
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="brand">RecallQ</div>
         <nav className="app-nav">
-          <button
-            type="button"
-            className={view === "feed" ? "active" : ""}
-            onClick={() => setView("feed")}
-          >
+          <button type="button" className={view === "feed" ? "active" : ""} onClick={() => setView("feed")}>
             Feed
           </button>
-          <button
-            type="button"
-            className={view === "settings" ? "active" : ""}
-            onClick={() => setView("settings")}
-          >
+          <button type="button" className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}>
             Settings
           </button>
         </nav>
-        <button className="linklike" type="button" onClick={() => void handleSignOut()}>
-          Sign out
-        </button>
+        <span className="cloud-state">{cloudEnabled ? "Cloud sync on" : "Local only"}</span>
       </header>
       <main className="app-main">
-        {view === "feed" ? <Feed /> : <Settings />}
+        {view === "feed" ? (
+          <Feed cloudEnabled={cloudEnabled} />
+        ) : (
+          <SettingsView auth={auth} plan={plan} settings={settings} onChange={refreshMeta} />
+        )}
       </main>
     </div>
   );
 }
 
-// --- Feed (capture + search + list) --------------------------------------
+// --- Feed ----------------------------------------------------------------
 
-function Feed() {
-  const [items, setItems] = useState<ListItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+function Feed({ cloudEnabled }: { cloudEnabled: boolean }) {
+  const [items, setItems] = useState<LocalItem[]>([]);
   const [query, setQuery] = useState("");
-  const requestId = useRef(0);
+  const [capture, setCapture] = useState("");
 
-  const load = useCallback(async (q: string, append: string | null) => {
-    const id = ++requestId.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiClient.items.list({
-        limit: 30,
-        q: q || undefined,
-        cursor: append || undefined,
-      });
-      if (id !== requestId.current) return; // a newer request superseded this
-      setItems((prev) => (append ? [...prev, ...res.items] : res.items));
-      setCursor(res.nextCursor);
-      setHasMore(res.hasMore);
-    } catch (err) {
-      if (id !== requestId.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      if (id === requestId.current) setLoading(false);
-    }
-  }, []);
+  const reload = useCallback(async () => {
+    setItems(query.trim() ? await search(query) : await getVisible());
+  }, [query]);
 
-  // Debounced search / initial load.
   useEffect(() => {
-    const handle = setTimeout(() => void load(query, null), query ? 250 : 0);
+    const handle = setTimeout(() => void reload(), query ? 200 : 0);
     return () => clearTimeout(handle);
-  }, [query, load]);
+  }, [query, reload]);
+
+  // Refresh whenever the archive changes (background saves, sync pulls).
+  useEffect(() => {
+    const listener = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string,
+    ) => {
+      if (area === "local" && changes[ARCHIVE_KEY]) void reload();
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, [reload]);
+
+  async function handleCapture() {
+    const text = capture.trim();
+    if (!text) return;
+    if (/^https?:\/\/\S+$/i.test(text)) await addUrls([{ url: text }]);
+    else await addText(text);
+    void runSync().catch(() => {});
+    setCapture("");
+    await reload();
+  }
+
+  async function remove(localId: string) {
+    await softDelete(localId);
+    void runSync().catch(() => {});
+    await reload();
+  }
 
   return (
     <div className="feed">
-      <Capture onCaptured={() => void load(query, null)} />
+      <div className="capture">
+        <input
+          type="text"
+          value={capture}
+          onChange={(e) => setCapture(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleCapture();
+          }}
+          placeholder="Paste a link or type a note, then press Enter"
+          aria-label="Capture a link or note"
+        />
+        <button className="primary" type="button" onClick={() => void handleCapture()}>
+          Save
+        </button>
+      </div>
       <input
         className="search"
         type="search"
@@ -142,35 +143,36 @@ function Feed() {
         placeholder="Search your archive…"
         aria-label="Search your archive"
       />
-      {error ? <div className="status error">{error}</div> : null}
-      {!loading && items.length === 0 ? (
+      {items.length === 0 ? (
         <div className="empty">{query ? "No matches." : "Nothing saved yet."}</div>
       ) : null}
       <ul className="item-list">
         {items.map((item) => (
-          <ItemRow key={item.id} item={item} />
+          <ItemRow key={item.localId} item={item} cloudEnabled={cloudEnabled} onDelete={remove} />
         ))}
       </ul>
-      {loading ? <div className="muted">Loading…</div> : null}
-      {hasMore && !loading ? (
-        <button className="secondary" type="button" onClick={() => void load(query, cursor)}>
-          Load more
-        </button>
-      ) : null}
     </div>
   );
 }
 
-function ItemRow({ item }: { item: ListItem }) {
+function ItemRow({
+  item,
+  cloudEnabled,
+  onDelete,
+}: {
+  item: LocalItem;
+  cloudEnabled: boolean;
+  onDelete: (localId: string) => void;
+}) {
   const host = (() => {
-    if (!item.raw_url) return null;
+    if (!item.url) return null;
     try {
-      return new URL(item.raw_url).hostname.replace(/^www\./, "");
+      return new URL(item.url).hostname.replace(/^www\./, "");
     } catch {
       return null;
     }
   })();
-  const title = item.title || item.raw_url || item.raw_text?.slice(0, 80) || "Untitled";
+  const title = item.title || item.url || "Untitled";
   return (
     <li className="item-row">
       <div className="item-body">
@@ -178,86 +180,96 @@ function ItemRow({ item }: { item: ListItem }) {
         {item.summary ? <div className="item-summary">{item.summary}</div> : null}
         <div className="item-meta">
           {host ? <span>{host}</span> : <span>{item.type}</span>}
-          {!item.enriched ? <span className="enriching">Enriching…</span> : null}
+          {cloudEnabled ? (
+            <span className={item.serverId ? "badge synced" : "badge pending"}>
+              {item.serverId ? "Synced" : "Pending"}
+            </span>
+          ) : null}
         </div>
       </div>
-      {item.raw_url ? (
-        <a className="open-link" href={item.raw_url} target="_blank" rel="noreferrer">
-          Open
-        </a>
-      ) : null}
+      <div className="item-actions">
+        {item.url ? (
+          <a className="open-link" href={item.url} target="_blank" rel="noreferrer">
+            Open
+          </a>
+        ) : null}
+        <button className="linklike" type="button" onClick={() => onDelete(item.localId)} aria-label="Delete">
+          Delete
+        </button>
+      </div>
     </li>
   );
 }
 
-function Capture({ onCaptured }: { onCaptured: () => void }) {
-  const [value, setValue] = useState("");
-  const [saving, setSaving] = useState(false);
+// --- Settings ------------------------------------------------------------
+
+function SettingsView({
+  auth,
+  plan,
+  settings,
+  onChange,
+}: {
+  auth: StoredAuth | null;
+  plan: Plan;
+  settings: ExtensionSettings;
+  onChange: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const cloudAllowed = canUseCloudSync(plan);
 
-  async function save() {
-    const text = value.trim();
-    if (!text || saving) return;
-    setSaving(true);
+  async function toggleClose(checked: boolean) {
+    await setSettings({ closeTabsAfterSending: checked });
+    await onChange();
+  }
+
+  async function toggleCloud(checked: boolean) {
     setMsg(null);
-    try {
-      const isUrl = /^https?:\/\/\S+$/i.test(text);
-      if (isUrl) await apiClient.ingest.url({ url: text, source: "extension" });
-      else await apiClient.ingest.text({ text, source: "extension" });
-      setValue("");
-      setMsg("Saved");
-      onCaptured();
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
+    if (!checked) {
+      await setSettings({ cloudSyncEnabled: false });
+      await onChange();
+      return;
     }
+    // Enabling: ensure signed in, then confirm a paid plan, then backfill.
+    let signedIn = auth;
+    if (!signedIn) {
+      try {
+        signedIn = await signInWithRecallQ();
+      } catch {
+        return;
+      }
+    }
+    const freshPlan = await getPlan(true);
+    if (!canUseCloudSync(freshPlan)) {
+      setMsg("Cloud sync requires a Starter or Pro plan.");
+      await onChange();
+      return;
+    }
+    await setSettings({ cloudSyncEnabled: true });
+    await onChange();
+    await doSync();
   }
 
-  return (
-    <div className="capture">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") void save();
-        }}
-        placeholder="Paste a link or type a note, then press Enter"
-        aria-label="Capture a link or note"
-      />
-      <button className="primary" type="button" onClick={() => void save()} disabled={saving}>
-        {saving ? "Saving…" : "Save"}
-      </button>
-      {msg ? <span className="capture-msg">{msg}</span> : null}
-    </div>
-  );
-}
-
-// --- Settings (incl. plan-gated sync) ------------------------------------
-
-function Settings() {
-  const [settings, setLocal] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
-  const [plan, setPlan] = useState<Plan>("free");
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    void (async () => {
-      const [s, p] = await Promise.all([getSettings(), getPlan()]);
-      setLocal(s);
-      setPlan(p);
-      setReady(true);
-    })();
-  }, []);
-
-  const syncAllowed = canSyncSettings(plan);
-
-  async function update(patch: Partial<ExtensionSettings>) {
-    const next = await setSettings(patch);
-    setLocal(next);
+  async function doSync() {
+    setBusy(true);
+    const res = await runSync();
+    setBusy(false);
+    if (res.ok) {
+      setMsg(
+        `Synced — ${res.pushed} up, ${res.pulled} down` +
+          (res.pending ? `, ${res.pending} pending (monthly cloud limit)` : ""),
+      );
+    } else {
+      setMsg(res.reason === "disabled" ? "Cloud sync is off." : "Sync failed.");
+    }
+    await onChange();
   }
 
-  if (!ready) return <div className="muted">Loading…</div>;
+  async function signOut() {
+    await clearStoredAuth();
+    await setSettings({ cloudSyncEnabled: false });
+    await onChange();
+  }
 
   return (
     <div className="settings">
@@ -265,7 +277,7 @@ function Settings() {
         <input
           type="checkbox"
           checked={settings.closeTabsAfterSending}
-          onChange={(e) => void update({ closeTabsAfterSending: e.target.checked })}
+          onChange={(e) => void toggleClose(e.target.checked)}
         />
         <span>
           <strong>Close tabs after sending</strong>
@@ -273,31 +285,46 @@ function Settings() {
         </span>
       </label>
 
-      <label className={`setting ${syncAllowed ? "" : "disabled"}`}>
+      <label className={`setting ${cloudAllowed || !auth ? "" : "disabled"}`}>
         <input
           type="checkbox"
-          checked={settings.syncEnabled && syncAllowed}
-          disabled={!syncAllowed}
-          onChange={(e) => void update({ syncEnabled: e.target.checked })}
+          checked={settings.cloudSyncEnabled && cloudAllowed}
+          onChange={(e) => void toggleCloud(e.target.checked)}
         />
         <span>
-          <strong>Sync settings across devices</strong>
+          <strong>Sync to cloud</strong>
           <small>
-            {syncAllowed
-              ? "Keep these preferences in sync across your signed-in Chrome profiles."
-              : "Available on Starter and Pro plans."}
+            Save your archive to RecallQ and sync it across your devices. Free saves stay
+            unlimited and on-device; cloud sync needs a Starter or Pro plan.
           </small>
         </span>
       </label>
 
-      {!syncAllowed ? (
+      {!cloudAllowed ? (
         <a className="upgrade" href={`${WEB_BASE_URL}/app/settings/billing`} target="_blank" rel="noreferrer">
-          Upgrade to enable sync →
+          Upgrade to enable cloud sync →
         </a>
       ) : null}
 
+      {settings.cloudSyncEnabled && cloudAllowed ? (
+        <button className="secondary" type="button" disabled={busy} onClick={() => void doSync()}>
+          {busy ? "Syncing…" : "Sync now"}
+        </button>
+      ) : null}
+
+      {msg ? <div className="muted">{msg}</div> : null}
+
       <div className="plan-badge">
-        Plan: <strong>{plan}</strong>
+        {auth ? (
+          <>
+            Plan: <strong>{plan}</strong> ·{" "}
+            <button className="linklike" type="button" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          </>
+        ) : (
+          <>Not signed in — saving locally.</>
+        )}
       </div>
     </div>
   );

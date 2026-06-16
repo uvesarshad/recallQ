@@ -76,7 +76,9 @@ export type IngestItemInput = {
 type IngestBatchSuccess = {
   success: true;
   count: number;
-  items: IngestSuccess[];
+  // Per-item results in request order — each carries the server id, which the
+  // sync engine maps back onto the local items it pushed.
+  items: { id: string }[];
 };
 
 // Subset of `GET /api/v1/me` needed by non-web clients today: the plan (for
@@ -109,6 +111,7 @@ export type ListItem = {
   tags: string[] | null;
   source: string | null;
   created_at: string;
+  updated_at: string;
   raw_url: string | null;
   raw_text: string | null;
   collection_id: string | null;
@@ -128,6 +131,9 @@ type ListItemsParams = {
   q?: string;
   tag?: string;
   type?: string;
+  // Delta-sync: ISO timestamp; returns items changed after it, oldest-first.
+  // `nextCursor` is then the last item's `updated_at` (advance and repeat).
+  since?: string;
 };
 
 type ListItemsResponse = {
@@ -193,11 +199,16 @@ export function createRecallClient(opts: ClientOptions) {
         if (params.q) query.set("q", params.q);
         if (params.tag) query.set("tag", params.tag);
         if (params.type) query.set("type", params.type);
+        if (params.since) query.set("since", params.since);
         const qs = query.toString();
         return request<ListItemsResponse>(`/items${qs ? `?${qs}` : ""}`);
       },
       get: (id: string) =>
         request<{ item: ListItem | null }>(`/items/${encodeURIComponent(id)}`),
+      delete: (id: string) =>
+        request<{ success: true }>(`/items/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        }),
     },
     ingest: {
       url: (input: IngestUrlInput) =>

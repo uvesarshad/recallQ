@@ -24,6 +24,9 @@ export default defineConfig({
       // these APIs, so nothing is injected into pages.
       "tabs",
       "tabGroups",
+      // Unbounded on-device archive: all users save unlimited tabs locally,
+      // free and offline, regardless of plan. Cloud sync is the paid layer.
+      "unlimitedStorage",
     ],
     host_permissions: [
       "https://recallq.xyz/*",
