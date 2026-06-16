@@ -27,7 +27,7 @@ Columns:
 | `/api/v1/auth/tokens` | GET | ✅ session only | 🔒 no body | 🔒 N/A | ⚠️ | Read-only, cookie-only — abuse cost negligible. Defer rate limit. |
 | `/api/v1/auth/tokens/[id]` | DELETE | ✅ session only | 🔒 no body | 🔒 N/A | ⚠️ | Same rationale. |
 | `/api/v1/health` | GET | 🔒 public | 🔒 no body | 🔒 N/A | 🔒 N/A | Intentionally unauthenticated for CloudPanel / uptime probes. Does no work beyond two `SELECT`s. |
-| `/api/v1/items` | GET | ✅ `requireSessionUser` | 🔒 query string | 🔒 N/A | ⚠️ | Heavy query if `limit` were unbounded — limit is already capped at 50 in code. Add per-user rate limit if abuse is observed. |
+| `/api/v1/items` | GET | ✅ `requireUser` (session + bearer) | 🔒 query string | 🔒 N/A | ⚠️ | Bearer-enabled so the extension/mobile feed can read the archive (matches the documented client contract). Ownership filter in SQL; `limit` capped at 50 in code. Add per-user rate limit if abuse is observed. |
 | `/api/v1/items` | POST | ✅ `requireIngestUser` | ✅ `ingestPayloadSchema` | ✅ via `ingestItem` | ⚠️ | Calls into `lib/ingest.ts` which checks plan limit. Add the same `ingest:user:<id>` rate-limit bucket here for consistency with `/ingest` (TODO). |
 | `/api/v1/items/[id]` | GET | ✅ `requireSessionUser` | 🔒 no body | 🔒 N/A | 🔒 N/A | Ownership filter in SQL (`WHERE user_id = $1`). |
 | `/api/v1/items/[id]` | PATCH | ✅ `requireSessionUser` | ✅ Zod | 🔒 N/A | ⚠️ | Per-user rate limit not applied; PATCH is cheap. Watch in logs. |
@@ -42,7 +42,7 @@ Columns:
 | `/api/v1/graph` | GET | ✅ `requireSessionUser` | 🔒 no body | 🔒 N/A | 🔒 N/A | Ownership filter in SQL. |
 | `/api/v1/collections` | GET/POST | ✅ session | ✅ Zod on POST | 🔒 N/A | 🔒 N/A | |
 | `/api/v1/collections/[id]` | PATCH/DELETE | ✅ session | ✅ Zod on PATCH | 🔒 N/A | 🔒 N/A | Ownership filter in SQL. |
-| `/api/v1/me` | GET | ✅ session | 🔒 no body | 🔒 N/A | 🔒 N/A | |
+| `/api/v1/me` | GET | ✅ `requireUser` (session + bearer) | 🔒 no body | 🔒 N/A | 🔒 N/A | Bearer-enabled so non-web clients can read their own plan for entitlement gating (extension settings sync). PATCH/DELETE stay session-only. |
 | `/api/v1/user/telegram-link` | POST | ✅ session | ✅ Zod | 🔒 N/A | ⚠️ | Generates a one-time link token. Should be rate-limited (5/user/hour) to avoid token spam; TODO. |
 | `/api/v1/user/telegram-status` | GET | ✅ session | 🔒 no body | 🔒 N/A | 🔒 N/A | |
 | `/api/v1/user/telegram-token` | POST | ✅ session | 🔒 no body | 🔒 N/A | ⚠️ | Rotates the user's ingest token. Should be rate-limited (5/user/hour); TODO. |

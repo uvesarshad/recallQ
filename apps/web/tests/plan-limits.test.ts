@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   canUserSave,
+  canUseDeviceSync,
   canUseEmailIngest,
   getChatQueryLimit,
   getMaxReminders,
@@ -35,6 +36,11 @@ export function runPlanLimitsTests() {
   assert.equal(canUseEmailIngest("free"), false);
   assert.equal(canUseEmailIngest("starter"), true);
   assert.equal(canUseEmailIngest("pro"), true);
+
+  // canUseDeviceSync — cross-device settings sync gated to paid plans
+  assert.equal(canUseDeviceSync("free"), false);
+  assert.equal(canUseDeviceSync("starter"), true);
+  assert.equal(canUseDeviceSync("pro"), true);
 
   // getChatQueryLimit
   assert.equal(getChatQueryLimit("free"), PLAN_LIMITS.free.chatQueriesPerDay);

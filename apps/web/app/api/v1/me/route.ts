@@ -4,7 +4,7 @@ import { isStripeEnabled } from "@/lib/billing-stripe";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getPlanLimits } from "@/lib/plan-limits";
-import { requireSessionUser } from "@/lib/request-auth";
+import { requireSessionUser, requireUser } from "@/lib/request-auth";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +17,11 @@ const profileSchema = z.object({
   analytics_consent: z.boolean(),
 });
 
-export async function GET() {
-  const user = await requireSessionUser();
+// GET accepts a bearer token as well as a session cookie so non-web clients
+// (Chrome extension, mobile) can read their own profile + plan for entitlement
+// gating. PATCH/DELETE stay session-only — they mutate the account.
+export async function GET(req: Request) {
+  const user = await requireUser(req);
   if (!user) {
     return apiError("Unauthorized", 401);
   }

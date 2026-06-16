@@ -19,6 +19,11 @@ export default defineConfig({
       "contextMenus",
       "storage",
       "identity",
+      // Read url/title/index/groupId of non-active tabs (bulk tab sends) and
+      // enumerate tab groups. No content scripts — all tab data comes from
+      // these APIs, so nothing is injected into pages.
+      "tabs",
+      "tabGroups",
     ],
     host_permissions: [
       "https://recallq.xyz/*",

@@ -1,11 +1,13 @@
 import { apiError, apiOk } from "@/lib/api";
 import { db } from "@/lib/db";
-import { requireSessionUser } from "@/lib/request-auth";
+import { requireUser } from "@/lib/request-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const user = await requireSessionUser();
+  // Accepts a bearer token as well as a session cookie — non-web clients
+  // (Chrome extension feed, mobile) read their archive through this route.
+  const user = await requireUser(req);
   if (!user) {
     return apiError("Unauthorized", 401);
   }

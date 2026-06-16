@@ -42,7 +42,7 @@ All application routes live under `/api/v1/*`. Paths below are shown without the
 
 ### Archive Items Endpoints
 
-- api/items [GET]: Queries the user's item list. Accepts query parameters: q (fuzzy keywords search), tag, collection (folder UUID), type, cursor (for pagination), and limit (max 50). Returns items list, nextCursor value, and a boolean indicating if more items exist.
+- api/items [GET]: Queries the user's item list. Authenticated via `requireUser` (session cookie or bearer token) so the extension/mobile feed can read it. Accepts query parameters: q (fuzzy keywords search), tag, collection (folder UUID), type, cursor (for pagination), and limit (max 50). Returns items list, nextCursor value, and a boolean indicating if more items exist.
 - api/items [POST]: Creates a manual archive item, calling the ingestion engine.
 - api/items/[id] [GET]: Fetches metadata for a single item by UUID. Returns the full item object.
 - api/items/[id] [PATCH]: Updates item parameters (title, summary, tags, folder, reminders, or canvas positioning coordinates). Evaluates comment actions if note updates contain commands. Returns the updated item.
@@ -67,7 +67,7 @@ All application routes live under `/api/v1/*`. Paths below are shown without the
 
 - api/telegram [POST]: Webhook endpoint that parses text/files from the Telegram bot, links Telegram IDs to user profile records, and replies via Telegram.
 - api/email [POST]: Inbound email webhook parser. Receives email attachments and text, resolving matching users.
-- api/me [GET] / api/user [PATCH]: Returns active profile details or patches name, bio, timezone, and consent options.
+- api/me [GET] / api/user [PATCH]: Returns active profile details or patches name, bio, timezone, and consent options. GET uses `requireUser` (session or bearer) so non-web clients can read their own plan + usage for entitlement gating; PATCH/DELETE stay session-only.
 
 ## Security Constraints
 - AGENT AVOID: Never return raw SQL connection errors or stack traces to the client. Always catch API exceptions and route them through `fail(...)` from `apps/web/lib/api-response.ts` which renders the `ErrorResponse` envelope.

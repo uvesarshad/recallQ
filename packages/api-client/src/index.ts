@@ -62,6 +62,42 @@ type IngestSuccess = {
   status: "pending" | "enriched";
 };
 
+// A single row in a bulk ingest request. Mirrors `ingestPayloadSchema` in
+// `apps/web/lib/validation.ts`. The extension's bulk tab-send builds these.
+export type IngestItemInput = {
+  type: "url" | "text" | "note" | "file";
+  raw_url?: string | null;
+  raw_text?: string | null;
+  title?: string | null;
+  capture_note?: string | null;
+  source?: string;
+};
+
+type IngestBatchSuccess = {
+  success: true;
+  count: number;
+  items: IngestSuccess[];
+};
+
+// Subset of `GET /api/v1/me` needed by non-web clients today: the plan (for
+// entitlement gating) plus the usage block. The full payload carries more
+// (billing config, subscription state) — promote fields here as clients use
+// them.
+export type MeResponse = {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    plan: "free" | "starter" | "pro";
+  } | null;
+  usage: {
+    saves_this_month: number;
+    max_saves_per_month: number;
+    storage_used_bytes: number;
+    max_storage_bytes: number;
+  } | null;
+};
+
 // Minimal item shape needed by mobile + extension. Mirrors the columns
 // `apps/web/app/api/v1/items/route.ts` SELECTs. Promote to `@recall/api-schema`
 // once a second client needs more fields.
@@ -186,6 +222,23 @@ export function createRecallClient(opts: ClientOptions) {
             source: input.source ?? "extension",
           }),
         }),
+      // Bulk capture in one request. The server bulk path accepts up to 100
+      // items (`bulkIngestPayloadSchema`); callers that have more must chunk
+      // before calling. On a mid-batch plan-cap hit the server returns 402
+      // with `details.imported_count` — surfaced via `RecallApiError.details`.
+      batch: (items: IngestItemInput[]) =>
+        request<IngestBatchSuccess>("/ingest", {
+          method: "POST",
+          body: JSON.stringify({
+            items: items.map((item) => ({
+              source: "extension",
+              ...item,
+            })),
+          }),
+        }),
+    },
+    me: {
+      get: () => request<MeResponse>("/me"),
     },
     raw: { request },
   };

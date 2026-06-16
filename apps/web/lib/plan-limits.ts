@@ -11,6 +11,7 @@ export const PLAN_LIMITS = {
     maxReminders: 2,
     emailIngest: false,
     chatQueriesPerDay: 20,
+    deviceSync: false,
   },
   starter: {
     maxSavesPerMonth: 100,
@@ -19,6 +20,7 @@ export const PLAN_LIMITS = {
     maxReminders: 30,
     emailIngest: true,
     chatQueriesPerDay: 50,
+    deviceSync: true,
   },
   pro: {
     maxSavesPerMonth: Infinity,
@@ -27,6 +29,7 @@ export const PLAN_LIMITS = {
     maxReminders: Infinity,
     emailIngest: true,
     chatQueriesPerDay: Infinity,
+    deviceSync: true,
   },
 };
 
@@ -37,6 +40,7 @@ const SELF_HOSTED_LIMITS = {
   maxReminders: Infinity,
   emailIngest: true,
   chatQueriesPerDay: Infinity,
+  deviceSync: true,
 };
 
 function isSelfHostedMode() {
@@ -53,6 +57,14 @@ export function canUserSave(plan: Plan, savesThisMonth: number) {
 
 export function canUseEmailIngest(plan: Plan) {
   return getPlanLimits(plan).emailIngest;
+}
+
+// Cross-device settings sync (Chrome extension prefs via chrome.storage.sync).
+// Enforced client-side in the extension — the synced data lives in the user's
+// own Google account, not RecallQ servers — but the entitlement is named here
+// so the plan tiers stay the single source of truth.
+export function canUseDeviceSync(plan: Plan) {
+  return getPlanLimits(plan).deviceSync;
 }
 
 export function getChatQueryLimit(plan: Plan) {
