@@ -1,43 +1,64 @@
 # Testing Infrastructure and Strategy
 
-> Scope: Test harnesses, CLI execution commands, utility test cases, and coverage areas.
+> Scope: Test harnesses, CLI commands, utility tests, and coverage areas.
 > Rendering context: N/A
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-07-07
 
 ## Overview
-Recall includes a lightweight, built-in custom test harness to validate core utility helpers, ingestion processing, and search scoring algorithms without the overhead of heavy third-party testing frameworks. The test suite runs directly in Node.js, stripping TypeScript typings at runtime.
+Recall uses a lightweight Node-based web test harness for focused utility coverage, plus TypeScript typechecks for app-level validation. Mobile uses the Expo app's `tsc --noEmit` script.
 
 ## Running Tests
-- Test Command: Executed by running npm run test in the project root.
-- Harness Script: Under the hood, this command executes tests/run-tests.ts using Node.js with the experimental strip types flag, which automatically parses and loads all TypeScript test files.
-- Execution Flow: The runner reads the tests directory, discovers files ending with test.ts, executes each module in isolation, catches runtime assertions, and logs pass or fail results to the terminal before exiting.
+- Web tests: from `apps/web`, run `npm run test -- --run`.
+- Web typecheck: from `apps/web`, run `npm run typecheck`.
+- Mobile typecheck: from the workspace root, run `pnpm --dir apps/mobile typecheck`.
+- Harness script: `apps/web/tests/run-tests.ts` imports each focused test suite and exits non-zero on assertion failure.
 
 ## Test Suites Map
 
 ### Item Preview Test Suite
-- File Location: tests/item-preview.test.ts
-- Target Component: Validates preview URL resolution and extraction logic in lib/item-preview.ts.
-- Focus Areas: Verifies that URLs are normalized properly, that metadata is resolved correctly from static patterns, and that error/null values are handled gracefully if URLs are malformed.
+- File: `apps/web/tests/item-preview.test.ts`
+- Target: `apps/web/lib/item-preview.ts`
+- Coverage: URL normalization, static metadata extraction, malformed URL handling.
 
 ### Search Explainability Test Suite
-- File Location: tests/search-explain.test.ts
-- Target Component: Validates search ranking explanation helper in lib/search-explain.ts.
-- Focus Areas: Tests similarity matching logic, exact phrase overlaps, and match reason labels. Ensures that when hybrid search returns a mix of exact and semantic results, each search card receives the correct explainability label (e.g. Exact Text Match or Highly Relevant) based on its score thresholds.
+- File: `apps/web/tests/search-explain.test.ts`
+- Target: `apps/web/lib/search-explain.ts`
+- Coverage: exact phrase overlaps, term matches, similarity labels, and reason text.
+
+### Relations Test Suite
+- File: `apps/web/tests/relations.test.ts`
+- Target: `apps/web/lib/relations.ts`
+- Coverage: relation pair ordering, strength clamping, and hostname extraction.
+
+### Plan Limits Test Suite
+- File: `apps/web/tests/plan-limits.test.ts`
+- Target: `apps/web/lib/plan-limits.ts`
+- Coverage: plan caps, self-host bypass behavior, and cloud-sync entitlement helpers.
+
+### Comment Actions Test Suite
+- File: `apps/web/tests/comment-actions.test.ts`
+- Target: `apps/web/lib/comment-actions.ts`
+- Coverage: tag extraction, reminder parsing, folder/category parsing, and intent signal behavior.
+
+### URL Safety Test Suite
+- File: `apps/web/tests/url-safety.test.ts`
+- Target: `apps/web/lib/url-safety.ts`
+- Coverage: blocking local/private/link-local/reserved IPs, localhost names, non-HTTP protocols, embedded credentials, and allowing public HTTP/HTTPS URLs.
 
 ## Testing Guidelines
-- AGENT AVOID: Do not introduce Jest, Mocha, or Vitest into the package dependencies unless explicitly requested by the user. Always leverage the lightweight tests/run-tests.ts runner.
-- AGENT NOTE: When writing new utility helper files under lib/, always create a corresponding test file in tests/ ending in .test.ts, and register it in tests/run-tests.ts if manual import is required.
+- AGENT AVOID: Do not introduce Jest, Mocha, or Vitest unless explicitly requested.
+- AGENT NOTE: New focused helpers under `apps/web/lib/` should have a matching `apps/web/tests/*.test.ts` file registered in `run-tests.ts`.
 
 ## Update Triggers
-- When the CLI test script configuration in package.json is modified.
-- When new test suites are added under the tests/ directory.
-- When existing test files are renamed or testing requirements are updated.
+- When test scripts change.
+- When test suites are added, renamed, or removed.
+- When new testing requirements are introduced.
 
 ## Related Docs
-- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) — Tech stack overview.
-- [docs/infra/deployment.md](file:///e:/Projects/recallQ/docs/infra/deployment.md) — Deployment scripts.
-- [docs/modules/search-chat-graph.md](file:///e:/Projects/recallQ/docs/modules/search-chat-graph.md) — Features validated by search tests.
+- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) - Tech stack overview.
+- [docs/infra/deployment.md](file:///e:/Projects/recallQ/docs/infra/deployment.md) - Runtime commands.
+- [docs/modules/search-chat-canvas.md](file:///e:/Projects/recallQ/docs/modules/search-chat-canvas.md) - Search features validated by tests.
 
-AGENT OWNER: tests/run-tests.ts
+AGENT OWNER: apps/web/tests/run-tests.ts
 AGENT UPDATE: docs/infra/testing.md

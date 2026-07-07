@@ -15,6 +15,19 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unexpected ingest failure";
 }
 
+function ingestErrorResponse(error: string, details?: Record<string, unknown>) {
+  if (error === "limit_reached" || error === "storage_limit_reached") {
+    return apiError(error, 402, { upgrade_url: "/app/settings", ...details });
+  }
+  if (error === "file_too_large") {
+    return apiError(error, 413, details);
+  }
+  if (error === "unsupported_file_type") {
+    return apiError(error, 415, details);
+  }
+  return apiError(error, 400, details);
+}
+
 export async function POST(req: Request) {
   const user = await requireIngestUser(req);
   if (!user) {
@@ -44,7 +57,7 @@ export async function POST(req: Request) {
       });
 
       if (result.error) {
-        return apiError(result.error, 402, { upgrade_url: "/app/settings" });
+        return ingestErrorResponse(result.error);
       }
 
       return apiOk(result);
@@ -70,8 +83,7 @@ export async function POST(req: Request) {
       });
 
       if (result.error) {
-        return apiError(result.error, 402, {
-          upgrade_url: "/app/settings",
+        return ingestErrorResponse(result.error, {
           imported_count: results.length,
         });
       }

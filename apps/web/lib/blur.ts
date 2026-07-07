@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { logger } from "@/lib/logger";
+import { safeFetch } from "@/lib/url-safety";
 
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -19,7 +20,7 @@ export async function computeBlurDataUrl(imageUrl: string): Promise<string | nul
 
     let response: Response;
     try {
-      response = await fetch(imageUrl, { signal: controller.signal });
+      response = await safeFetch(imageUrl, { signal: controller.signal });
     } finally {
       clearTimeout(timeout);
     }

@@ -13,8 +13,8 @@ import { Redirect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import {
-  isAppleSignInAvailable,
   signInWithApple,
+  useAppleSignInAvailability,
   useGoogleAuth,
 } from "@/lib/oauth";
 
@@ -37,8 +37,7 @@ export default function SignInScreen() {
   // Only available if Google web/iOS/Android client IDs are configured.
   const googleEnabled = Boolean(googleAuth.request);
 
-  // Apple flow is iOS-only.
-  const appleEnabled = isAppleSignInAvailable();
+  const appleEnabled = useAppleSignInAvailability();
 
   useEffect(() => {
     if (googleAuth.response?.type === "success") {

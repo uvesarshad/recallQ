@@ -13,6 +13,7 @@ import { embedText, sanitizeForPrompt } from "../lib/gemini";
 import { generateText } from "../lib/llm";
 import { logger } from "../lib/logger";
 import { clampStrength, getHostname, orderRelationPair } from "../lib/relations";
+import { safeFetch } from "../lib/url-safety";
 import { hasVectorSupport } from "../lib/vector";
 import { installCrashHandlers, startHeartbeat } from "../lib/worker-heartbeat";
 
@@ -31,7 +32,7 @@ function resolveUrl(candidate: string | undefined, baseUrl: string) {
 
 async function extractTextFromUrl(url: string) {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const res = await safeFetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) {
       return null;
     }

@@ -34,12 +34,14 @@ export async function saveFile(userId: string, itemId: string, filename: string,
   const filePath = path.join(userDir, sanitizeFilename(filename));
   await fs.writeFile(filePath, buffer);
 
-  await db.query(
-    "UPDATE users SET storage_used_bytes = storage_used_bytes + $1 WHERE id = $2",
-    [buffer.length, userId]
-  );
-
   return filePath;
+}
+
+export async function removeStoredFile(filePath: string) {
+  await fs.rm(filePath, { force: true });
+  const dir = path.dirname(filePath);
+  const entries = await fs.readdir(dir).catch(() => []);
+  if (entries.length === 0) await fs.rmdir(dir).catch(() => {});
 }
 
 export async function deleteFile(userId: string, filePath: string) {
@@ -47,10 +49,7 @@ export async function deleteFile(userId: string, filePath: string) {
   try {
     const stat = await fs.stat(filePath);
     size = stat.size;
-    await fs.rm(filePath, { force: true });
-    const dir = path.dirname(filePath);
-    const entries = await fs.readdir(dir);
-    if (entries.length === 0) await fs.rmdir(dir).catch(() => {});
+    await removeStoredFile(filePath);
   } catch {
     // File already gone — still decrement if we got the size
   }

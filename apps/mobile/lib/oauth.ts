@@ -4,6 +4,7 @@
 // cross-platform via expo-auth-session.
 
 import { Platform } from "react-native";
+import { useEffect, useState } from "react";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Google from "expo-auth-session/providers/google";
 import { API_BASE_URL } from "./config";
@@ -54,14 +55,39 @@ async function exchangeIdToken(input: {
 // ── Apple ───────────────────────────────────────────────────────────────
 
 export function isAppleSignInAvailable(): boolean {
-  // expo-apple-authentication only ships on iOS. On Android / web the SDK
-  // throws at import-time-not-quite-but-its-not-useful, so we gate strictly.
+  // Synchronous platform guard for callers that need a quick precheck.
   return Platform.OS === "ios";
 }
 
+export function useAppleSignInAvailability(): boolean {
+  const [available, setAvailable] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isAppleSignInAvailable()) {
+      setAvailable(false);
+      return;
+    }
+
+    void AppleAuthentication.isAvailableAsync()
+      .then((next) => {
+        if (mounted) setAvailable(next);
+      })
+      .catch(() => {
+        if (mounted) setAvailable(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return available;
+}
+
 export async function signInWithApple(deviceName: string): Promise<StoredAuth> {
-  if (!isAppleSignInAvailable()) {
-    throw new Error("Sign in with Apple is only available on iOS");
+  if (!isAppleSignInAvailable() || !(await AppleAuthentication.isAvailableAsync())) {
+    throw new Error("Sign in with Apple is not available on this device");
   }
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [

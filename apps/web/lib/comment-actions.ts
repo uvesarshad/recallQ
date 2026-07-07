@@ -100,8 +100,17 @@ export function extractCategoryName(input: string) {
   return categoryMatch?.[1]?.trim() || null;
 }
 
-async function ensureCollection(userId: string, name: string) {
-  const existing = await db.query(
+type Queryable = {
+  query: (text: string, params?: unknown[]) => Promise<{ rowCount: number | null; rows: any[] }>;
+};
+
+export async function ensureCollection(userId: string, name: string, queryable: Queryable = db) {
+  await queryable.query(
+    "SELECT pg_advisory_xact_lock(hashtext($1::text), hashtext(lower($2)))",
+    [userId, name],
+  );
+
+  const existing = await queryable.query(
     "SELECT id FROM collections WHERE user_id = $1 AND lower(name) = lower($2) LIMIT 1",
     [userId, name],
   );
@@ -109,7 +118,7 @@ async function ensureCollection(userId: string, name: string) {
     return existing.rows[0].id as string;
   }
 
-  const created = await db.query(
+  const created = await queryable.query(
     "INSERT INTO collections (user_id, name) VALUES ($1, $2) RETURNING id",
     [userId, name],
   );
@@ -208,6 +217,7 @@ export async function inferCaptureActions({
   existingReminderAt,
   existingTags,
   overrides,
+  resolveCollection = true,
 }: {
   userId: string;
   body: string;
@@ -219,6 +229,7 @@ export async function inferCaptureActions({
     categoryName?: string | null;
     reminderAt?: string | null;
   };
+  resolveCollection?: boolean;
 }) {
   const parsed = await parseActions(body);
   const resolvedTags = overrides?.tags ?? parsed.tags;
@@ -234,7 +245,9 @@ export async function inferCaptureActions({
   const tags = sanitizeTags([...(existingTags ?? []), ...resolvedTags]);
   const reminderAt = existingReminderAt || resolvedReminderAt;
   const categoryName = resolvedCategoryName;
-  const collectionId = existingCollectionId || (categoryName ? await ensureCollection(userId, categoryName) : null);
+  const collectionId =
+    existingCollectionId ||
+    (resolveCollection && categoryName ? await ensureCollection(userId, categoryName) : null);
 
   return {
     tags,

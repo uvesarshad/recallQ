@@ -1,51 +1,52 @@
 # Ingestion and Capture Module
 
-> Scope: Documents multi-surface captures, URL scraping, file parsing, structural action extractions, and the asynchronous enrichment pipeline.
+> Scope: Documents multi-surface captures, URL scraping, file parsing, structural action extraction, and the asynchronous enrichment pipeline.
 > Rendering context: Isomorphic
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-07-07
 
 ## Overview
-The Ingestion and Capture module is Recall's primary write entry point. It is engineered to capture notes, links, and documents instantly and non-blockingly from multiple sources. It processes inline tagging commands, routes items to collection folders, schedules email/Telegram notifications, and queues items for deep AI processing inside background workers.
+The Ingestion and Capture module is Recall's primary write entry point. It captures notes, links, and documents instantly from multiple surfaces, then queues deep processing for background workers. It also parses inline tags, folder moves, and reminders from capture text.
 
 ## Ingestion Architecture
 
 ### Capture Gateways
-- Web Interface: The CaptureBar and CreateItemDialog components present instant drag-and-drop file areas and pastable text inputs to users. They perform optimistic UI feeds.
-- REST Ingestion API: Handled in app/api/ingest/route.ts. Acts as the primary target gateway for third-party platforms and web extensions.
-- Email Ingestion: Handled in app/api/email/route.ts. Parses inbound emails on behalf of matching users.
-- Telegram Bot Webhook: Served by app/api/telegram/route.ts. Captures URL shares and text messages directly from Telegram chats.
-- PWA Share Target: Renders app/(app)/app/share-target/page.tsx, utilizing web app manifests to capture platform shares.
+- Web Interface: `CaptureBar` and `CreateItemDialog` perform optimistic capture from the app shell.
+- REST Ingestion API: `apps/web/app/api/v1/ingest/route.ts` and `apps/web/app/api/v1/ingest/file/route.ts` serve web, extension, mobile, and internal capture callers.
+- Email Ingestion: `apps/web/app/api/v1/email/inbound/route.ts` parses inbound emails for matching users.
+- Telegram Bot Webhook: `apps/web/app/api/v1/telegram/webhook/route.ts` captures Telegram text and URL shares.
+- PWA Share Target: `apps/web/app/(app)/app/share-target/route.ts` accepts platform shares.
+- Mobile: `apps/mobile` uses bearer auth through the shared API client and sends captures with `source: "mobile"`.
 
-### Processing Mechanics (lib/ingest.ts)
-Upon payload submission to ingestItem:
-- Limits Audit: Compares saves_this_month counts against users plan configurations inside lib/plan-limits.ts.
-- File Verification: Compares file sizes and MIME formats using helpers inside lib/storage.ts.
-- Action Synthesis: Invokes parseActions inside lib/comment-actions.ts. Identifies tags, folder moves, and reminders from the capture text. It combines regex lookups with a Gemini AI call to return structured JSON actions containing tags, categories, and reminders.
-- Storage Write: Saves the file buffer locally under user and item directories inside lib/storage.ts.
-- DB Insertion: Upserts collection directories if required. Inserts the item with enriched set to false, schedules active reminders inside the reminders table, and increments saves_this_month.
-- Return: Returns an optimistic success response with a pending status to avoid client-side response delays.
+### Processing Mechanics (`apps/web/lib/ingest.ts`)
+- Validation: Zod validates capture payloads in `apps/web/lib/validation.ts`.
+- Plan and storage limits: `ingestItem` locks the user row, checks finite save/storage/reminder caps, and never passes unlimited plan values into SQL comparisons.
+- File verification: MIME and file-size checks happen before disk writes; file bytes are counted exactly once.
+- Action synthesis: `inferCaptureActions` parses tags, folder names, and reminders with regex plus Gemini when intent signals are present.
+- Transactional write: folder resolution, item insert, save counter, storage accounting, and reminder insert happen in one DB transaction. Failed DB work rolls back counters, and failed file ingests clean up the written file.
+- Return: Returns an optimistic success response with `enrich_status: "pending"`.
 
-### Post-Capture Enrichment (workers/enrichment-worker.ts)
-The enrichment worker daemon polls PostgreSQL for unenriched records and finishes the ingestion lifecycle:
-- Extracting Body: Scrapes web links via cheerio or parses local file buffers using mammoth (Word), pdf-parse (PDF), or xlsx (spreadsheets).
-- Metadata Generation: Feeds the body text and capture notes to the Gemini generative model. Receives a structured JSON payload containing refined titles, summaries, and tags.
-- Embeddings Calculations: Throttles Gemini embedding requests using text-embedding-004. Saves the resulting 768-dimensional vector to PostgreSQL.
-- Sibling Mapping: Computes cosine vector distances. Inserts similar pairs with thresholds > 0.75 as ai_similar in item_relations. Maps domain overlaps for web URLs.
+### Post-Capture Enrichment (`apps/web/workers/enrichment-worker.ts`)
+- URL extraction: User-supplied URLs are fetched through `safeFetch` in `apps/web/lib/url-safety.ts`, then parsed with Cheerio.
+- File extraction: Local files are parsed with Mammoth (Word), pdf-parse (PDF), or SheetJS (spreadsheets).
+- Metadata generation: Gemini generates title, summary, tags, and possible reminder metadata.
+- Embeddings: `text-embedding-004` generates 768-dimensional vectors for search and relation building.
+- Image placeholders: scraped image URLs are also fetched through `safeFetch`; `apps/web/lib/blur.ts` applies byte caps before Sharp decodes the image.
 
 ## Security Constraints
-- AGENT AVOID: Never trigger heavy file parsing or Gemini embedding generation inside the web request lifecycle. These operations must strictly be offloaded to the background worker.
-- AGENT NOTE: Always sanitise file names before saving them to disk inside lib/storage.ts to prevent directory traversal exploits.
+- AGENT AVOID: Never trigger heavy file parsing, scraping, or embedding generation inside the web request lifecycle.
+- AGENT NOTE: Always sanitize file names before saving them to disk.
+- AGENT NOTE: Never fetch user-supplied URLs or scraped image URLs without `safeFetch`.
 
 ## Update Triggers
-- When the capture payload interface or ingestion helpers in lib/ingest.ts change.
-- When new command formats or tag extraction schemas are added to lib/comment-actions.ts.
-- When document text extraction libraries or scrapers in the background worker change.
+- When capture payload schemas or ingestion helpers change.
+- When command formats or action extraction behavior changes.
+- When document extraction libraries, remote fetch policy, or enrichment worker behavior changes.
 
 ## Related Docs
-- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) — Connects tech stack.
-- [docs/architecture/data-flow.md](file:///e:/Projects/recallQ/docs/architecture/data-flow.md) — Details the data flows.
-- [docs/modules/search-chat-graph.md](file:///e:/Projects/recallQ/docs/modules/search-chat-graph.md) — Details the retrieval.
+- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) - Connects tech stack.
+- [docs/architecture/data-flow.md](file:///e:/Projects/recallQ/docs/architecture/data-flow.md) - Details the data flows.
+- [docs/modules/search-chat-canvas.md](file:///e:/Projects/recallQ/docs/modules/search-chat-canvas.md) - Details retrieval.
 
-AGENT OWNER: lib/ingest.ts
+AGENT OWNER: apps/web/lib/ingest.ts
 AGENT UPDATE: docs/modules/capture.md

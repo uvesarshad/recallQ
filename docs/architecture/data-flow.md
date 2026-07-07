@@ -1,49 +1,51 @@
 # Application Data Flow
 
-> Scope: End-to-end data pipelines: Capture ingestion, AI background enrichment, vector relationship building, and RAG chat retrieval.
+> Scope: End-to-end data pipelines: capture ingestion, AI background enrichment, vector relationship building, and RAG chat retrieval.
 > Rendering context: Isomorphic
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-07-07
 
 ## Overview
-Recall features a strict, unidirectional data architecture designed to maintain an asynchronous, non-blocking ingestion engine. Operations are split into immediate, optimistic writes during capture, post-save asynchronous processing in background workers, and hybrid exact-semantic search pipelines during retrieval.
+Recall uses a unidirectional data architecture: immediate validated writes during capture, asynchronous enrichment in workers, and hybrid exact-semantic retrieval during search and chat.
 
 ## Data Lifecycles
 
 ### Capture and Ingestion Lifecycle
-- Ingestion Trigger: A user captures content through the CaptureBar component, a REST API post to api/ingest, an incoming webhook from Telegram (api/telegram) or email (api/email), or the PWA Share Target interface.
-- Request Authentication: Handled in lib/request-auth.ts. Resolves either the active web session or validates incoming secret tokens (e.g. x-internal-ingest-token) for external capture channels.
-- Limits Checking: Invokes canUserSave helper in lib/plan-limits.ts. Compares the user's plan type against their saves_this_month database counter to restrict or allow writes.
-- Action Extraction: Invokes inferCaptureActions in lib/comment-actions.ts. Parses tags (hashtags), folder paths, and reminders from the capture text. If needed, it calls Gemini to predict structured JSON actions.
-- File Storage: If a file is uploaded, the buffer is validated by file type and size. The local helper in lib/storage.ts saves the buffer inside the local filepath storage directory.
-- Database Save: Inserts a new record into the items table with enriched set to false. If a reminder was resolved, a record is added to the reminders table. Returns an optimistic success response to the client.
+- Trigger: A user captures content through the web app, REST API, Chrome extension, Expo mobile app, Telegram, email, or PWA share target.
+- Authentication: `apps/web/lib/request-auth.ts` resolves a web session, bearer token, or internal ingest token depending on the caller.
+- Validation: `apps/web/lib/validation.ts` validates type, source, URL/text/file metadata, folder, and action overrides.
+- Action extraction: `apps/web/lib/comment-actions.ts` infers tags, target folder name, and reminders without creating folders during the pre-transaction phase.
+- File storage: Accepted files are saved under the configured local file storage path. If the following DB transaction fails, the file is removed.
+- Transactional save: `ingestItem` locks the user row, checks save/storage/reminder caps, resolves or validates the folder, inserts the item, updates usage counters, and inserts the reminder in one transaction.
+- Response: The caller receives an item ID and pending enrichment status immediately after commit.
 
 ### AI Enrichment Pipeline
-- Daemon Detection: The background enrichment worker (workers/enrichment-worker.ts) polls PostgreSQL for records where enriched is false.
-- Extraction Phase: For URL types, it scrapes raw HTML via cheerio. For file types, it extracts body text using mammoth (Word), pdf-parse (PDF), or xlsx (Excel spreadsheets).
-- AI Processing: Packages the text, title hints, and capture notes into a system prompt. Calls the Gemini model, forcing JSON output with title, summary, tags, and implicit reminders.
-- Vector Generation: Embeds the AI-generated title and summary using Gemini text-embedding-004. Saves the resulting 768-dimensional array into the items table, updating enriched to true.
-- Relation Mapping: Computes cosine distances between the new item's vector and other vectors in the database. Inserts relations with strength > 0.75 as ai_similar in the item_relations table. Also creates same-domain domain relationships for URL items.
+- Detection: `apps/web/workers/enrichment-worker.ts` polls for `items.enriched = false`; migration 018 adds a partial index for this pending scan.
+- URL extraction: User-supplied URLs are fetched through `safeFetch`, which blocks unsafe protocols, localhost/private/link-local/reserved IP ranges, and unsafe redirects.
+- File extraction: The worker extracts text from local PDF, DOCX, spreadsheet, and text files.
+- AI processing: Gemini produces a title, summary, tags, and optional reminder hints from sanitized content.
+- Vector generation: Gemini `text-embedding-004` generates 768-dimensional vectors saved in PostgreSQL/pgvector.
+- Relation mapping: The worker computes vector similarity and same-domain relations for the user's archive.
 
 ### Search and RAG Retrieval
-- Hybrid Search: When querying the search endpoint or interactive map, the server performs exact SQL checks via ILIKE patterns (matching raw text, title, and summaries) and cosine similarity queries using pgvector.
-- RAG Query: In the ChatDrawer component, user messages post to api/chat. The handler calls answerArchiveQuestion in lib/archive-chat.ts.
-- Context Assembly: Embeds the user query, searches for matching items above a 0.68 cosine similarity threshold, maps their titles and content summaries into a context string, and prompts Gemini to answer the question using only the context.
-- Streaming: Returns the response to the client via server-sent events, streaming textual chunks followed by citation records linked to the corresponding items.
+- Hybrid search: `apps/web/lib/search.ts` merges PostgreSQL full-text results with pgvector semantic results, always scoped by authenticated user ID.
+- RAG chat: `apps/web/app/api/v1/chat/route.ts` embeds the latest query, retrieves relevant user-owned items, and streams a Gemini answer with citations.
+- Canvas: `apps/web/app/api/v1/graph/route.ts` returns user-owned nodes for the freeform canvas.
 
 ## Security Constraints
-- AGENT AVOID: Never trigger database modifications or vector generation within query GET requests. All writes must occur in POST/PATCH route handlers or async background workers.
-- AGENT NOTE: All raw content and scrapers must be sanitized before passing them to the Gemini API to prevent prompt injections.
+- AGENT AVOID: Never trigger database modifications or vector generation from GET requests.
+- AGENT NOTE: Raw content and scrapers must be sanitized before sending content to Gemini.
+- AGENT NOTE: Every search, chat, graph, and vector query must filter by authenticated user ID.
 
 ## Update Triggers
-- When the ingestion payload schema or parameter types in lib/ingest.ts are modified.
-- When the background enrichment prompt or embedding model is upgraded.
-- When new steps are added to the vector cosine relationship scoring pipeline.
+- When ingestion payload schemas or transaction boundaries change.
+- When enrichment fetch policy, prompts, embedding model, or relation scoring changes.
+- When retrieval thresholds, search merge behavior, or chat streaming schemas change.
 
 ## Related Docs
-- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) — Architectural overview.
-- [docs/modules/capture.md](file:///e:/Projects/recallQ/docs/modules/capture.md) — Capture engine logic.
-- [docs/modules/search-chat-graph.md](file:///e:/Projects/recallQ/docs/modules/search-chat-graph.md) — Search and retrieval views.
+- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) - Architectural overview.
+- [docs/modules/capture.md](file:///e:/Projects/recallQ/docs/modules/capture.md) - Capture engine logic.
+- [docs/modules/search-chat-canvas.md](file:///e:/Projects/recallQ/docs/modules/search-chat-canvas.md) - Search and retrieval views.
 
-AGENT OWNER: lib/ingest.ts
+AGENT OWNER: apps/web/lib/ingest.ts
 AGENT UPDATE: docs/architecture/data-flow.md

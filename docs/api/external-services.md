@@ -1,64 +1,72 @@
 # External Services and Third-Party Integrations
 
-> Scope: Documents third-party APIs, merchant payment gateways, email systems, chatbot services, and local document parsing libraries.
+> Scope: Third-party APIs, payment gateways, email systems, chatbots, safe remote fetching, and local parsing libraries.
 > Rendering context: Server-side
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-07-07
 
 ## Overview
-Recall relies on several external APIs and specialized utility libraries to perform core SaaS functions like AI synthesis, payments processing, transactional emails, Telegram chatbot captures, and text extractions from diverse uploaded file types.
+Recall uses external APIs for AI, payments, email, Telegram capture, and push delivery. Local worker libraries handle document parsing and image placeholder generation.
 
 ## AI and Generative Services
 
 ### Google Generative AI API
-- Role: Drives the semantic second-brain capabilities, RAG chat answering, and automated metadata generation.
-- SDK: Interacted with via the official Google Generative AI npm package.
-- Models: Uses gemini-2.5-flash-lite (by default, or configured in GEMINI_MODEL) for tagging and summaries. Uses text-embedding-004 to calculate 768-dimensional text vectors for search and RAG matches.
-- Consumer: Consumed by lib/gemini.ts, workers/enrichment-worker.ts, lib/archive-chat.ts, and lib/comment-actions.ts.
-- Credentials: GEMINI_API_KEY.
-- Fallback: Throws configuration errors if missing. Bypasses vector relationships and RAG queries if vector support is disabled.
+- Role: metadata generation, action extraction, semantic embeddings, and RAG chat answering.
+- SDK: `@google/generative-ai`.
+- Models: `gemini-2.5-flash-lite` by default for tagging/summaries; `text-embedding-004` for 768-dimensional embeddings.
+- Consumers: `apps/web/lib/gemini.ts`, `apps/web/lib/comment-actions.ts`, `apps/web/lib/archive-chat.ts`, and `apps/web/workers/enrichment-worker.ts`.
+- Credentials: `GEMINI_API_KEY`; optional `GEMINI_MODEL`.
 
 ## SaaS and Platform Integrations
 
 ### Razorpay API
-- Role: Payment processing and subscription tier management (Starter vs. Pro).
-- Integration Pattern: Custom fetch-based wrappers (razorpayRequest) targeting Razorpay endpoint routes.
-- Credentials: RAZORPAY_KEY_ID, NEXT_PUBLIC_RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and RAZORPAY_WEBHOOK_SECRET.
-- Webhooks: Validates payment completions and syncs limits through syncUserSubscriptionFromEntity in lib/billing.ts.
-- Fallback: Disabled in self-hosted configurations (SELF_HOSTED is true), giving all users access to unlimited limits.
+- Role: Starter/Pro subscription processing.
+- Credentials: `RAZORPAY_KEY_ID`, `NEXT_PUBLIC_RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, plan IDs.
+- Webhooks: `apps/web/app/api/v1/payments/webhook/route.ts` validates Razorpay signatures.
+
+### Stripe API
+- Role: Optional Stripe checkout, portal, and webhook billing path.
+- Credentials: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, Stripe price IDs, optional publishable keys.
+- Webhooks: `apps/web/app/api/v1/payments/stripe/webhook/route.ts` validates Stripe signatures.
 
 ### Resend API
-- Role: Sends transactional emails, reminder alerts, and password reset emails for local email/password accounts.
-- Integration Pattern: Interacts via the official Resend SDK.
-- Credentials: RESEND_API_KEY.
-- Fallback: Optional. Email reminder delivery is skipped or limited where the API key is not configured. Password reset links are logged to the server console in local development when the API key or sender address is missing.
+- Role: password reset mail, transactional email, inbound email ingestion, and email reminders.
+- Credentials: `RESEND_API_KEY`, `RESEND_FROM_EMAIL` or `EMAIL_FROM`, inbound/webhook secrets.
+- Fallback: local development can log reset links; reminder email is skipped when Resend is not configured.
 
 ### Telegram Bot API
-- Role: Handles remote chat bot capture and posts reminders back to users.
-- Integration Pattern: Invokes standard fetch requests to Telegram API endpoints.
-- Credentials: TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, and TELEGRAM_WEBHOOK_SECRET.
-- Helpers: Manages sendMessage, setWebhook, and getFile (downloading buffers directly from Telegram hosts) in lib/telegram.ts.
+- Role: Telegram capture, linking, and reminder delivery.
+- Credentials: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`.
+- Helpers: `apps/web/lib/telegram.ts`.
+
+### Expo Push API
+- Role: mobile reminder delivery.
+- Endpoint: `https://exp.host/--/api/v2/push/send` via `apps/web/lib/expo-push.ts`.
+- Registry: `/api/v1/devices/push` stores per-device Expo tokens.
+
+## Safe Remote Fetching
+User-supplied link URLs and scraped image URLs must go through `apps/web/lib/url-safety.ts`. `safeFetch` allows only HTTP/HTTPS, rejects embedded credentials, blocks localhost/private/link-local/reserved IP ranges, validates DNS results, and revalidates redirects. `apps/web/lib/blur.ts` still enforces image byte caps before Sharp decodes a thumbnail.
 
 ## Content Parsing Libraries
-Recall extracts text from files locally inside the enrichment worker, bypassing external API parsing overhead:
-- Cheerio: Parses raw HTML strings from URLs to scrape og:title, og:description, and og:image tags.
-- PDF Parse: Reads raw PDF buffers and returns stripped page content.
-- Mammoth: Asynchronously extracts plain text from Word files (.docx).
-- SheetJS (XLSX): Extracts sheets and outputs textual representations from Excel sheets (.xls, .xlsx).
+- Cheerio: Parses fetched HTML for metadata and text.
+- PDF Parse: Extracts PDF text.
+- Mammoth: Extracts DOCX text.
+- SheetJS (XLSX): Extracts spreadsheet text.
+- Sharp: Builds tiny blur placeholders for scraped images after safe fetch and byte caps.
 
 ## Security Constraints
-- AGENT AVOID: Never hardcode Razorpay merchant keys or Gemini API keys. They must strictly be retrieved from the environment schema in lib/env.ts.
-- AGENT NOTE: Always verify webhooks via sha256 crypt hmac signatures inside lib/billing.ts to defend against payment fraud.
+- AGENT AVOID: Never hardcode API keys or webhook secrets.
+- AGENT NOTE: Verify webhook signatures for Razorpay, Stripe, Resend, and Telegram.
+- AGENT NOTE: Never call `fetch` directly for user-supplied URLs or scraped image URLs. Use `safeFetch`.
 
 ## Update Triggers
-- When adding, updating, or deleting third-party APIs or npm parsers.
-- When changing the model names or endpoints of a registered AI service.
-- When changing signature validation or webhook patterns for Resend, Razorpay, or Telegram.
+- When adding, updating, or deleting third-party APIs or parser libraries.
+- When model names, remote fetch policy, webhook validation, or push behavior changes.
 
 ## Related Docs
-- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) — Tech stack context.
-- [docs/infra/environment.md](file:///e:/Projects/recallQ/docs/infra/environment.md) — Connects env parameters.
-- [docs/api/database.md](file:///e:/Projects/recallQ/docs/api/database.md) — Details the vector storage.
+- [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) - Tech stack context.
+- [docs/infra/environment.md](file:///e:/Projects/recallQ/docs/infra/environment.md) - Environment variables.
+- [docs/api/database.md](file:///e:/Projects/recallQ/docs/api/database.md) - Vector and device-token storage.
 
-AGENT OWNER: lib/gemini.ts
+AGENT OWNER: apps/web/lib/gemini.ts
 AGENT UPDATE: docs/api/external-services.md

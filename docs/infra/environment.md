@@ -3,7 +3,7 @@
 > Scope: Lists and describes all environment variables used by the Recall application, their visibility, validation, and consuming modules.
 > Rendering context: Isomorphic
 > Project tier: 4
-> Last updated: 2026-05-22
+> Last updated: 2026-07-07
 
 ## Overview
 Recall utilizes a Zod validation schema inside lib/env.ts to enforce exact types, defaults, and optional flags for all environment variables at startup. If any required variable is missing or formatted incorrectly in the local environment, the application throws a configuration error on boot.
@@ -51,9 +51,18 @@ Recall utilizes a Zod validation schema inside lib/env.ts to enforce exact types
 - OAUTH_ALLOWED_GOOGLE_AUDIENCES: Comma-separated additional audiences the mobile OAuth-exchange endpoint accepts beyond `GOOGLE_CLIENT_ID`. Set to your Google iOS + Android OAuth client IDs.
 - OAUTH_ALLOWED_APPLE_AUDIENCES: Comma-separated additional audiences accepted beyond `APPLE_CLIENT_ID`. Set to your iOS bundle id (e.g. `ai.montr.recallq`).
 
+## Mobile Expo Public Variables
+
+These are consumed by `apps/mobile` at Metro bundle time and are not validated by `apps/web/lib/env.ts`:
+- EXPO_PUBLIC_API_URL: Optional mobile API base URL, e.g. `http://192.168.1.42:3008/api/v1`. If absent in development, `apps/mobile/lib/config.ts` derives the Metro LAN host and uses port 3008.
+- EXPO_PUBLIC_WEB_URL: Optional mobile web base URL. If absent in development, it follows the same Metro host and port 3008 derivation.
+- EXPO_PUBLIC_EAS_PROJECT_ID: Optional Expo project ID used for push token registration in development builds. Push registration is skipped in Expo Go.
+- EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID / EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID / EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: Optional Google OAuth client IDs that enable the Google sign-in button in the Expo app.
+
 ## Security Constraints
 - AGENT AVOID: Never expose secret keys to the browser. Only NEXT_PUBLIC_RAZORPAY_KEY_ID is public-safe. All other secrets are strictly server-side.
 - AGENT NOTE: If adding a new environment variable, it must be declared in both the Zod schema in lib/env.ts and documented in this file.
+- AGENT NOTE: Mobile-only `EXPO_PUBLIC_*` variables belong in this document even though they are not part of the web server Zod schema.
 
 ## Update Triggers
 - When a new environment variable is added to lib/env.ts.

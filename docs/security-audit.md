@@ -1,100 +1,53 @@
 # Per-Route Security Audit
 
-> Scope: One-row-per-endpoint audit of `apps/web/app/api/v1/*` and the legacy `/api/auth/[...nextauth]` mount. Documents which guards are in place and which need follow-up.
-> Last updated: 2026-05-22
+> Scope: Endpoint guards, cross-cutting controls, and remaining security follow-ups for `apps/web/app/api/v1/*`.
+> Last updated: 2026-07-07
 
-## How to read this table
+## How to Read This Audit
+- Auth: route gates business logic behind session, bearer, internal token, or webhook signature.
+- Validation: request bodies/queries are schema-checked or tightly bounded.
+- Plan limit: billable resource use is checked server-side.
+- Rate limit: local Postgres fixed-window limiting is present where abuse cost matters.
 
-Every column should be ✅ for a route that's safe to call from any client. Symbols:
+## Cross-Cutting Controls
+- Session auth: NextAuth guards web routes and session-only API routes.
+- Bearer auth: `requireUser(req)` supports extension/mobile/API clients through hashed personal access tokens.
+- Ingest auth: `requireIngestUser(req)` supports session, bearer, and internal-token capture channels.
+- Response envelopes: API errors should use shared helpers instead of leaking stack traces.
+- Rate limiting: auth token issue, chat, ingest, actions preview, selected billing/device routes, and credentials authorize are limited.
+- Security headers: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and nonce-based CSP Report-Only live in config/proxy.
+- SSRF guard: user-supplied URL scraping and scraped image placeholder fetches go through `apps/web/lib/url-safety.ts`, which rejects unsafe protocols, localhost/private/link-local/reserved IPs, embedded credentials, and unsafe redirects.
+- Atomic ingest accounting: `apps/web/lib/ingest.ts` locks the user row and commits save count, storage bytes, item insert, folder resolution, and reminder insert in one transaction.
 
-- ✅ — guard present and correct
-- 🔒 — guard intentionally not applicable (e.g. webhook with signature, public health endpoint)
-- ⚠️ — gap that needs attention; the **Notes** column points at the follow-up
+## Route Summary
 
-Columns:
+| Endpoint group | Auth | Validation | Plan limit | Rate limit | Notes |
+|---|---|---|---|---|---|
+| `/api/auth/[...nextauth]` | NextAuth | NextAuth | N/A | credentials limited | OAuth callbacks stay unversioned. |
+| `/api/v1/auth/tokens` | email/password or session | Zod | N/A | POST limited | GET/DELETE session-only. |
+| `/api/v1/auth/oauth/token` | provider ID token | Zod + JWKS | N/A | limited | Mobile OAuth exchange. |
+| `/api/v1/health` | public | no body | N/A | N/A | DB + worker heartbeat only. |
+| `/api/v1/ingest` | session/bearer/internal | Zod | transactional | limited | Supports `mobile` source. |
+| `/api/v1/ingest/file` | session/bearer/internal | multipart checks | transactional | shared ingest bucket | MIME + hard size checked first. |
+| `/api/v1/items` | session or bearer | bounded query | N/A | watch logs | Ownership filter in SQL. |
+| `/api/v1/items/[id]` | session; DELETE also bearer | Zod on PATCH | N/A | cheap path | Ownership filter in SQL. |
+| `/api/v1/search` | session | query length cap | N/A | watch logs | User-scoped search helpers. |
+| `/api/v1/chat` | session | `ChatRequestSchema` | chat quota | limited | Streams RAG answer. |
+| `/api/v1/graph` | session | no body | N/A | N/A | User-scoped canvas payload. |
+| `/api/v1/collections` | session | Zod on writes | N/A | N/A | Ownership filter. |
+| `/api/v1/reminders` | session | Zod on writes | reminder cap via ingest/create | N/A | Ownership filter. |
+| `/api/v1/devices/push` | session or bearer | Zod | N/A | limited | Mobile token registration. |
+| `/api/v1/actions/preview` | session | Zod | AI cost surface | limited | Gemini call. |
+| `/api/v1/payments/*` | session or provider signature | Zod/signature | N/A | selected routes limited | Razorpay/Stripe signatures. |
+| `/api/v1/email/inbound` | Resend signature + address | schema | ingest limits | provider side | Capture path. |
+| `/api/v1/telegram/webhook` | Telegram secret | webhook shape | ingest limits | provider side | Capture path. |
+| `/api/v1/files/[...path]` | session | path checks | N/A | N/A | Session + user path prefix + traversal guard. |
 
-- **Auth** — the request can only reach the business logic with a valid session cookie, bearer token, internal token, or webhook signature.
-- **Validation** — request body (if any) is validated against a Zod schema via `parseBody` from `apps/web/lib/api-response.ts` or `safeParse` directly.
-- **Plan limit** — where the route consumes a billable resource (capture, storage, chat), the per-plan limit is enforced before the work runs.
-- **Rate limit** — Stage 5 burst protection via `apps/web/lib/rate-limit.ts`.
+## Still Deferred
+1. Flip CSP from Report-Only to enforcing after production reports are clean.
+2. Add a CORS allow-list for the Chrome extension origin once the stable extension ID exists.
+3. Add durable server-side tombstones so extension/mobile delta sync can propagate server-side deletes.
+4. Add worker claim/status columns if multiple enrichment workers will run concurrently.
 
-## Routes
-
-| Endpoint | Method | Auth | Validation | Plan limit | Rate limit | Notes |
-|---|---|---|---|---|---|---|
-| `/api/auth/[...nextauth]` | * | 🔒 NextAuth catch-all | 🔒 NextAuth handled | 🔒 N/A | ⚠️ | Stage 5 didn't rate-limit NextAuth's `/credentials/signin`. The parallel `/api/v1/auth/tokens` POST (which mints PATs) is rate-limited; equivalent IP+email limit on the NextAuth credentials callback is tracked as Stage 5 follow-up. |
-| `/api/v1/auth/tokens` | POST | ✅ email+password | ✅ `TokenIssueInputSchema` | 🔒 N/A | ✅ 5/IP/15min + 10/email/hour | |
-| `/api/v1/auth/tokens` | GET | ✅ session only | 🔒 no body | 🔒 N/A | ⚠️ | Read-only, cookie-only — abuse cost negligible. Defer rate limit. |
-| `/api/v1/auth/tokens/[id]` | DELETE | ✅ session only | 🔒 no body | 🔒 N/A | ⚠️ | Same rationale. |
-| `/api/v1/health` | GET | 🔒 public | 🔒 no body | 🔒 N/A | 🔒 N/A | Intentionally unauthenticated for CloudPanel / uptime probes. Does no work beyond two `SELECT`s. |
-| `/api/v1/items` | GET | ✅ `requireUser` (session + bearer) | 🔒 query string | 🔒 N/A | ⚠️ | Bearer-enabled so the extension/mobile feed can read the archive (matches the documented client contract). Ownership filter in SQL; `limit` capped at 50 in code. Add per-user rate limit if abuse is observed. |
-| `/api/v1/items` | POST | ✅ `requireIngestUser` | ✅ `ingestPayloadSchema` | ✅ via `ingestItem` | ⚠️ | Calls into `lib/ingest.ts` which checks plan limit. Add the same `ingest:user:<id>` rate-limit bucket here for consistency with `/ingest` (TODO). |
-| `/api/v1/items/[id]` | GET | ✅ `requireSessionUser` | 🔒 no body | 🔒 N/A | 🔒 N/A | Ownership filter in SQL (`WHERE user_id = $1`). |
-| `/api/v1/items/[id]` | PATCH | ✅ `requireSessionUser` | ✅ Zod | 🔒 N/A | ⚠️ | Per-user rate limit not applied; PATCH is cheap. Watch in logs. |
-| `/api/v1/items/[id]` | DELETE | ✅ `requireUser` (session + bearer) | 🔒 no body | 🔒 N/A | 🔒 N/A | Bearer-enabled so the extension can propagate local deletes during two-way sync. Idempotent; ownership filter in SQL. |
-| `/api/v1/items/[id]/comments` | GET/POST | ✅ session | ✅ Zod on POST | 🔒 N/A | ⚠️ | POST is cheap. |
-| `/api/v1/items/[id]/related` | GET | ✅ session | 🔒 no body | 🔒 N/A | 🔒 N/A | Read-only ownership-filtered SELECT. |
-| `/api/v1/items/batch` | POST | ✅ `requireSessionUser` | ✅ Zod | 🔒 N/A | ⚠️ | Batch capped in code; rate limit deferred. |
-| `/api/v1/ingest` | POST | ✅ `requireIngestUser` (session / bearer / internal) | ✅ Zod (single + bulk) | ✅ via `ingestItem` | ✅ 60/user/min | |
-| `/api/v1/ingest/file` | POST | ✅ `requireIngestUser` | ✅ multipart validation | ✅ via `ingestItem` | ⚠️ | File ingest doesn't yet share the `ingest:user` bucket. TODO: add the same `rateLimit({ key: ingest:user:..., limit: 60, windowMs: 60_000 })` block. |
-| `/api/v1/chat` | POST | ✅ `requireSessionUser` | 🔒 chat history (no Zod schema yet) | ✅ daily quota by plan | ✅ 30/user/hour | Add a `ChatRequestSchema` to `@recall/api-schema` and validate in Stage 6 / Stage 8 (extension consumer needs the schema anyway). |
-| `/api/v1/search` | GET | ✅ `requireSessionUser` | ✅ query length capped | 🔒 N/A | ⚠️ | Query length 500 cap is the validation. Add per-user rate limit if hot path. |
-| `/api/v1/graph` | GET | ✅ `requireSessionUser` | 🔒 no body | 🔒 N/A | 🔒 N/A | Ownership filter in SQL. |
-| `/api/v1/collections` | GET/POST | ✅ session | ✅ Zod on POST | 🔒 N/A | 🔒 N/A | |
-| `/api/v1/collections/[id]` | PATCH/DELETE | ✅ session | ✅ Zod on PATCH | 🔒 N/A | 🔒 N/A | Ownership filter in SQL. |
-| `/api/v1/me` | GET | ✅ `requireUser` (session + bearer) | 🔒 no body | 🔒 N/A | 🔒 N/A | Bearer-enabled so non-web clients can read their own plan for entitlement gating (extension settings sync). PATCH/DELETE stay session-only. |
-| `/api/v1/user/telegram-link` | POST | ✅ session | ✅ Zod | 🔒 N/A | ⚠️ | Generates a one-time link token. Should be rate-limited (5/user/hour) to avoid token spam; TODO. |
-| `/api/v1/user/telegram-status` | GET | ✅ session | 🔒 no body | 🔒 N/A | 🔒 N/A | |
-| `/api/v1/user/telegram-token` | POST | ✅ session | 🔒 no body | 🔒 N/A | ⚠️ | Rotates the user's ingest token. Should be rate-limited (5/user/hour); TODO. |
-| `/api/v1/reminders` | GET/POST | ✅ session | ✅ Zod on POST | 🔒 N/A | 🔒 N/A | |
-| `/api/v1/reminders/[id]` | PATCH/DELETE | ✅ session | ✅ Zod on PATCH | 🔒 N/A | 🔒 N/A | Ownership filter in SQL. |
-| `/api/v1/push-subscription` | POST | ✅ session | ✅ Zod | 🔒 N/A | 🔒 N/A | Browser push subscription registration. |
-| `/api/v1/actions/preview` | POST | ✅ session | ✅ Zod | 🔒 N/A | ⚠️ | Calls Gemini on every request — meaningful cost surface. Add a `preview:user/hour` rate limit (e.g. 60/hour). TODO. |
-| `/api/v1/payments/create-subscription` | POST | ✅ session | ✅ Zod | 🔒 N/A | ⚠️ | Razorpay subscription creation is rate-limited downstream by Razorpay itself; add local cap to short-circuit attacks. TODO. |
-| `/api/v1/payments/cancel-subscription` | POST | ✅ session | 🔒 no body | 🔒 N/A | 🔒 N/A | |
-| `/api/v1/payments/webhook` | POST | 🔒 Razorpay HMAC signature (`x-razorpay-signature`) | 🔒 webhook payload | 🔒 N/A | 🔒 N/A | Signature verification gates body parsing. |
-| `/api/v1/telegram/webhook` | POST | 🔒 Telegram secret token (`x-telegram-bot-api-secret-token`) | 🔒 webhook payload | ✅ via `ingestItem` | 🔒 N/A | Per-user save limits applied through `lib/ingest.ts`. |
-| `/api/v1/email/inbound` | POST | 🔒 Resend webhook signature + per-user inbound address | 🔒 webhook payload | ✅ via `ingestItem` | 🔒 N/A | |
-| `/api/v1/files/[...path]` | GET | ✅ session + path-prefix ownership check + path traversal guard | 🔒 path params | 🔒 N/A | 🔒 N/A | Three-layer guard: session, `userId === session.user.id` from path, file_path must start with `FILES_BASE_PATH`. |
-
-## Cross-cutting controls (Stage 5)
-
-- **HTTPS / HSTS.** `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` is set on every response via `apps/web/next.config.mjs`. CloudPanel terminates TLS via Let's Encrypt; the header is harmless over plain HTTP in dev because browsers ignore HSTS without TLS.
-- **Clickjacking.** `X-Frame-Options: DENY` plus `frame-ancestors 'none'` in the CSP. The settings page does not embed third-party frames.
-- **MIME sniffing.** `X-Content-Type-Options: nosniff`.
-- **Referrer leakage.** `Referrer-Policy: strict-origin-when-cross-origin`.
-- **Powerful APIs.** `Permissions-Policy` disables camera, microphone, geolocation, and the FLoC `interest-cohort`.
-- **Content-Security-Policy.** Set in **Report-Only** mode for production. Allowlist below. Flip to enforcing (`Content-Security-Policy` without the `-Report-Only` suffix) once the report endpoint shows no legitimate violations for a sustained window.
-  - `default-src 'self'`
-  - `script-src 'self' 'unsafe-inline' https://checkout.razorpay.com` — `'unsafe-inline'` is temporary for the Razorpay checkout shim. Migration to a nonce-based policy is a follow-up.
-  - `connect-src 'self' https://api.razorpay.com https://generativelanguage.googleapis.com`
-  - `img-src 'self' data: https:` — broad to allow scraped item thumbnails.
-  - `style-src 'self' 'unsafe-inline'` — Tailwind v4 emits inline `<style>` for some cases; tighten if/when it stops.
-  - `font-src 'self' data:`
-  - `frame-src https://api.razorpay.com https://checkout.razorpay.com`
-  - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`
-- **Cookies.** NextAuth defaults to `secure` + `sameSite: 'lax'` + `httpOnly` when running over HTTPS; verified in production by `auth()` callback.
-- **Boot-time hardening.** `apps/web/lib/env.ts` refuses to start in production when `AUTH_SECRET` is shorter than 32 characters or when `DATABASE_URL` points at localhost without an explicit `SELF_HOSTED=true` opt-in (the CloudPanel single-server case).
-- **Token storage on non-web clients.** Documented expectations: Chrome extension uses `chrome.storage.local` (encrypted at rest by Chrome under MV3), mobile uses Expo SecureStore (Keychain on iOS, EncryptedSharedPreferences on Android). Wiring lives with each client (Stages 8 and 9).
-- **Secrets in repo.** `.gitignore` blocks `.env` and `.env.*` (only `.env.example` is committed). Verified no AUTH_SECRET / DATABASE_URL / API key values are present in the tracked tree.
-
-## Outstanding follow-ups (Stage 5 → Stage 8)
-
-### Applied 2026-05-22 (audit-todos sweep)
-
-- ✅ Rate-limited the NextAuth credentials authorize (`apps/web/lib/auth.ts`) — mirrors the `5/IP/15min + 10/email/hour` limits already on `POST /api/v1/auth/tokens`, separate bucket keys (`nextauth-credentials:ip:*`, `nextauth-credentials:email:*`) so a brute-force on one surface doesn't lock the other for the same user/IP.
-- ✅ `ChatRequestSchema` lives in `@recall/api-schema/src/chat.ts` and is validated via `parseBody` in `/api/v1/chat`. Extension and mobile clients can now import the same schema.
-- ✅ `POST /api/v1/actions/preview` is rate-limited 60/user/hour.
-- ✅ `POST /api/v1/ingest/file` now shares the same `ingest:user:<id>` bucket as `POST /api/v1/ingest` — clients can't multiplex between JSON and multipart ingest to double their allowance.
-- ✅ `POST /api/v1/user/telegram-token` is rate-limited 5/user/hour. (`/telegram-link` POST does not exist — only DELETE, which is idempotent and unauthenticated-attacker-irrelevant.)
-- ✅ `POST /api/v1/payments/create-subscription` is rate-limited 5/user/hour — local cap to short-circuit before we burn a Razorpay round-trip.
-- ✅ Hourly GC of stale `rate_limits` (> 1d old) + expired `password_reset_tokens` (> 7d past expiry) now runs from the reminder worker.
-- ✅ Razorpay shim migrated to a nonce-based CSP. Per-request nonce is generated in `apps/web/proxy.ts` for every HTML route, forwarded via `x-nonce` request header, attached to the inline theme `<Script>` in `app/layout.tsx`, and listed in `script-src 'nonce-XXX' 'strict-dynamic'`. `'unsafe-inline'` is kept as a fallback for browsers that don't honor `'strict-dynamic'`; modern browsers ignore it entirely.
-
-### Still deferred
-
-1. After 1-2 weeks of CSP Report-Only data in production, flip the header name from `Content-Security-Policy-Report-Only` to `Content-Security-Policy`.
-2. Add a CORS allow-list for the Chrome extension origin once Stage 8 publishes a stable extension ID. Until then `/api/v1/*` is same-origin-permissive.
-
-AGENT OWNER: apps/web/lib/rate-limit.ts, apps/web/proxy.ts, apps/web/next.config.mjs
+AGENT OWNER: apps/web/lib/rate-limit.ts, apps/web/proxy.ts, apps/web/lib/url-safety.ts
 AGENT UPDATE: docs/security-audit.md

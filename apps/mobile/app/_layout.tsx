@@ -2,12 +2,11 @@ import "../global.css";
 
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, AppState, View } from "react-native";
-import * as Notifications from "expo-notifications";
 import { Stack, Redirect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
-import { configureNotificationHandling } from "@/lib/push";
+import { addNotificationResponseListener, configureNotificationHandling } from "@/lib/push";
 import { syncPendingCaptures } from "@/lib/offline-queue";
 
 configureNotificationHandling();
@@ -35,13 +34,10 @@ function RootStack() {
   // Deep-link from a notification tap. The reminder worker sets
   // `data.itemId`; if present, jump straight to the item detail.
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { itemId?: string };
-      if (data?.itemId) {
-        router.push(`/item/${data.itemId}`);
-      }
+    const sub = addNotificationResponseListener((itemId) => {
+      router.push(`/item/${itemId}`);
     });
-    return () => sub.remove();
+    return () => sub?.remove();
   }, [router]);
 
   if (loading) {
