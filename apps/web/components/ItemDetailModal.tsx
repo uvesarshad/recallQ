@@ -1,13 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Calendar, ExternalLink, MessageSquare, Sparkles, Tag, Trash2, X } from "lucide-react";
+import type { CSSProperties } from "react";
+import {
+  AlertTriangle,
+  Archive,
+  BookOpen,
+  Bookmark,
+  Calendar,
+  CheckCircle2,
+  ExternalLink,
+  Heart,
+  Highlighter,
+  MessageSquare,
+  Sparkles,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react";
 import Image from "next/image";
 import ActionPreview, { type ActionOverrideValue, type ActionPreviewValue } from "@/components/ActionPreview";
 import { dispatchArchiveItemsChanged } from "@/lib/archive-events";
 import { resolvePreviewImageUrl } from "@/lib/item-preview";
 import { useModalA11y } from "@/lib/use-modal-a11y";
-import type { ArchiveComment, ArchiveItem, CollectionRecord } from "@/lib/types";
+import type { ArchiveComment, ArchiveItem, CollectionRecord, ItemHighlight } from "@/lib/types";
 
 // Glassmorphism detail modal. Preserves all existing logic, API calls, and
 // behaviour — only the visual presentation has changed.
@@ -41,6 +57,13 @@ const REMINDER_PRESETS: Array<{ label: string; days: number; hour: number }> = [
   { label: "Next week", days: 7, hour: 9 },
 ];
 
+type ReaderPayload = {
+  reader?: {
+    text?: string | null;
+    source?: "archive" | "item" | "summary" | "none";
+  };
+};
+
 export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailModalProps) {
   const [item, setItem] = useState<ArchiveItem | null>(null);
   const [comments, setComments] = useState<ArchiveComment[]>([]);
@@ -57,6 +80,17 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
   const [draftTagsInput, setDraftTagsInput] = useState("");
   const [draftCollectionId, setDraftCollectionId] = useState("");
   const [draftReminderAt, setDraftReminderAt] = useState("");
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [readerOpen, setReaderOpen] = useState(false);
+  const [readerLoading, setReaderLoading] = useState(false);
+  const [readerText, setReaderText] = useState<string | null>(null);
+  const [readerSource, setReaderSource] = useState<string>("none");
+  const [stateLoading, setStateLoading] = useState(false);
+  const [highlights, setHighlights] = useState<ItemHighlight[]>([]);
+  const [highlightQuote, setHighlightQuote] = useState("");
+  const [highlightNote, setHighlightNote] = useState("");
+  const [highlightColor, setHighlightColor] = useState<ItemHighlight["color"]>("yellow");
+  const [highlightLoading, setHighlightLoading] = useState(false);
 
   const load = useCallback(async () => {
     const [itemRes, commentsRes, collectionsRes] = await Promise.all([
@@ -77,6 +111,17 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
   useEffect(() => {
     if (open && itemId) void load();
   }, [load, open, itemId]);
+
+  useEffect(() => {
+    if (!open) {
+      setReaderOpen(false);
+      setReaderText(null);
+      setHighlights([]);
+      setHighlightQuote("");
+      setHighlightNote("");
+      setHighlightColor("yellow");
+    }
+  }, [open]);
 
   // Debounced action preview as the user types in the comment box. Matches
   // the inline preview shown in the Capture dialog so command syntax feels
@@ -177,6 +222,104 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
       dispatchArchiveItemsChanged();
     } finally {
       setSavingMeta(false);
+    }
+  }
+
+  async function requestArchive() {
+    if (!item?.raw_url || archiveLoading) return;
+    setArchiveLoading(true);
+    try {
+      await fetch(`/api/items/${itemId}/archive`, { method: "POST" });
+      await load();
+      dispatchArchiveItemsChanged();
+    } finally {
+      setArchiveLoading(false);
+    }
+  }
+
+  async function loadReader() {
+    if (!itemId || readerLoading) return;
+    setReaderLoading(true);
+    try {
+      const [readerRes, highlightsRes] = await Promise.all([
+        fetch(`/api/items/${itemId}/reader`),
+        fetch(`/api/items/${itemId}/highlights`),
+      ]);
+      const readerData = (await readerRes.json()) as ReaderPayload;
+      const highlightsData = (await highlightsRes.json()) as { highlights?: ItemHighlight[] };
+      setReaderText(readerData.reader?.text ?? null);
+      setReaderSource(readerData.reader?.source ?? "none");
+      setHighlights(highlightsData.highlights ?? []);
+      setReaderOpen(true);
+    } finally {
+      setReaderLoading(false);
+    }
+  }
+
+  async function saveReaderState(update: Partial<ArchiveItem>) {
+    if (!item || stateLoading) return;
+    setStateLoading(true);
+    try {
+      const response = await fetch(`/api/items/${itemId}/state`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      const data = (await response.json()) as { item?: Partial<ArchiveItem> };
+      if (data.item) {
+        setItem((current) => (current ? { ...current, ...data.item } : current));
+        dispatchArchiveItemsChanged();
+      }
+    } finally {
+      setStateLoading(false);
+    }
+  }
+
+  async function createHighlight() {
+    if (!highlightQuote.trim() || highlightLoading) return;
+    setHighlightLoading(true);
+    try {
+      const response = await fetch(`/api/items/${itemId}/highlights`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quote: highlightQuote,
+          note: highlightNote.trim() || null,
+          color: highlightColor,
+        }),
+      });
+      const data = (await response.json()) as { highlight?: ItemHighlight };
+      if (data.highlight) {
+        setHighlights((current) => [data.highlight!, ...current]);
+        setHighlightQuote("");
+        setHighlightNote("");
+      }
+    } finally {
+      setHighlightLoading(false);
+    }
+  }
+
+  async function deleteHighlight(highlightId: string) {
+    await fetch(`/api/items/${itemId}/highlights/${highlightId}`, { method: "DELETE" });
+    setHighlights((current) => current.filter((entry) => entry.id !== highlightId));
+  }
+
+  async function markLinkFalsePositive() {
+    if (!item?.link_broken || stateLoading) return;
+    setStateLoading(true);
+    try {
+      const response = await fetch(`/api/items/${itemId}/link-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "false_positive" }),
+      });
+      const data = (await response.json()) as { item?: Partial<ArchiveItem> };
+      if (data.item) {
+        setItem((current) => (current ? { ...current, ...data.item } : current));
+        dispatchArchiveItemsChanged();
+      }
+    } finally {
+      setStateLoading(false);
     }
   }
 
@@ -417,34 +560,116 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
 
           {/* URL or raw text */}
           {item?.raw_url ? (
-            <a
-              href={item.raw_url}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                fontFamily: MONO,
-                fontSize: 12.5,
-                color: T.azure,
-                textDecoration: "none",
-                marginBottom: 16,
-              }}
-            >
-              <ExternalLink size={12} />
-              <span
+            <>
+              <a
+                href={item.raw_url}
+                target="_blank"
+                rel="noreferrer"
                 style={{
-                  maxWidth: 420,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  display: "block",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontFamily: MONO,
+                  fontSize: 12.5,
+                  color: T.azure,
+                  textDecoration: "none",
+                  marginBottom: 10,
                 }}
               >
-                {item.raw_url}
-              </span>
-            </a>
+                <ExternalLink size={12} />
+                <span
+                  style={{
+                    maxWidth: 420,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    display: "block",
+                  }}
+                >
+                  {item.raw_url}
+                </span>
+              </a>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginBottom: 16,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  border: `1px solid ${item.link_broken ? "rgba(220,38,38,.2)" : T.line}`,
+                  background: item.link_broken ? "rgba(239,68,68,.07)" : "rgba(255,255,255,.45)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                  {item.link_broken ? (
+                    <AlertTriangle size={15} color="#dc2626" />
+                  ) : (
+                    <Archive size={15} color={T.azure} />
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: T.ink, margin: 0 }}>
+                      {archiveStatusLabel(item.archive_status)}
+                    </p>
+                    <p style={{ fontFamily: FONT, fontSize: 11.5, color: item.link_broken ? "#dc2626" : T.inkFaint, margin: "2px 0 0 0" }}>
+                      {archiveStatusDetail(item)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void requestArchive()}
+                  disabled={archiveLoading || item.archive_status === "pending" || item.archive_status === "processing"}
+                  style={{
+                    flexShrink: 0,
+                    fontFamily: FONT,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: archiveLoading ? "rgba(61,125,255,.45)" : T.azure,
+                    border: "none",
+                    borderRadius: 10,
+                    padding: "7px 11px",
+                    cursor:
+                      archiveLoading || item.archive_status === "pending" || item.archive_status === "processing"
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  {archiveLoading
+                    ? "Queued"
+                    : item.archive_status === "available"
+                      ? "Re-archive"
+                      : item.archive_status === "failed"
+                        ? "Retry"
+                        : item.archive_status === "pending" || item.archive_status === "processing"
+                          ? "Queued"
+                          : "Archive"}
+                </button>
+                {item.link_broken ? (
+                  <button
+                    type="button"
+                    onClick={() => void markLinkFalsePositive()}
+                    disabled={stateLoading}
+                    style={{
+                      flexShrink: 0,
+                      fontFamily: FONT,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#dc2626",
+                      background: "rgba(239,68,68,.07)",
+                      border: "1px solid rgba(220,38,38,.18)",
+                      borderRadius: 10,
+                      padding: "7px 11px",
+                      cursor: stateLoading ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Mark OK
+                  </button>
+                ) : null}
+              </div>
+            </>
           ) : item?.raw_text ? (
             <p
               style={{
@@ -458,6 +683,276 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
             >
               {item.raw_text}
             </p>
+          ) : null}
+
+          {item ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 14,
+                background: "rgba(255,255,255,.48)",
+                border: `1px solid ${T.line}`,
+              }}
+            >
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => void saveReaderState({ is_favorite: !item.is_favorite })}
+                  disabled={stateLoading}
+                  style={readerToggleStyle(Boolean(item.is_favorite), "#dc2626")}
+                >
+                  <Heart size={13} fill={item.is_favorite ? "#dc2626" : "none"} />
+                  Favorite
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveReaderState({ is_read_later: !item.is_read_later })}
+                  disabled={stateLoading}
+                  style={readerToggleStyle(Boolean(item.is_read_later), T.azure)}
+                >
+                  <Bookmark size={13} fill={item.is_read_later ? T.azure : "none"} />
+                  Read later
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveReaderState({ is_archived: !item.is_archived })}
+                  disabled={stateLoading}
+                  style={readerToggleStyle(Boolean(item.is_archived), T.mint)}
+                >
+                  <Archive size={13} />
+                  Archived
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void saveReaderState({
+                      reading_state: item.reading_state === "read" ? "reading" : "read",
+                      reading_progress: item.reading_state === "read" ? 50 : 100,
+                    })
+                  }
+                  disabled={stateLoading}
+                  style={readerToggleStyle(item.reading_state === "read", "#0E9E83")}
+                >
+                  <CheckCircle2 size={13} />
+                  Read
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (readerOpen ? setReaderOpen(false) : void loadReader())}
+                  disabled={readerLoading}
+                  style={{
+                    marginLeft: "auto",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontFamily: FONT,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: T.ink,
+                    border: "none",
+                    borderRadius: 10,
+                    padding: "7px 11px",
+                    cursor: readerLoading ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <BookOpen size={13} />
+                  {readerLoading ? "Loading" : readerOpen ? "Hide reader" : "Reader"}
+                </button>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 700, color: T.inkFaint, textTransform: "uppercase", letterSpacing: ".08em" }}>
+                    Progress
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: T.inkFaint }}>
+                    {item.reading_state ?? "unread"} · {item.reading_progress ?? 0}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={item.reading_progress ?? 0}
+                  onChange={(event) =>
+                    setItem((current) =>
+                      current
+                        ? {
+                            ...current,
+                            reading_progress: Number(event.target.value),
+                            reading_state:
+                              Number(event.target.value) >= 100
+                                ? "read"
+                                : Number(event.target.value) > 0
+                                  ? "reading"
+                                  : "unread",
+                          }
+                        : current,
+                    )
+                  }
+                  onMouseUp={(event) =>
+                    void saveReaderState({ reading_progress: Number(event.currentTarget.value) })
+                  }
+                  onTouchEnd={(event) =>
+                    void saveReaderState({ reading_progress: Number(event.currentTarget.value) })
+                  }
+                  style={{ width: "100%", marginTop: 8, accentColor: T.azure }}
+                />
+              </div>
+
+              {readerOpen ? (
+                <div style={{ marginTop: 14 }}>
+                  {readerText ? (
+                    <article
+                      style={{
+                        maxHeight: 280,
+                        overflowY: "auto",
+                        whiteSpace: "pre-wrap",
+                        fontFamily: FONT,
+                        fontSize: 15,
+                        lineHeight: 1.7,
+                        color: T.ink,
+                        background: "rgba(255,255,255,.5)",
+                        border: `1px solid ${T.line}`,
+                        borderRadius: 12,
+                        padding: 14,
+                      }}
+                    >
+                      {readerText}
+                    </article>
+                  ) : (
+                    <p style={{ fontFamily: FONT, fontSize: 13, color: T.inkFaint, margin: 0 }}>
+                      No readable text is stored yet.
+                    </p>
+                  )}
+                  <p style={{ fontFamily: MONO, fontSize: 10.5, color: T.inkFaint, margin: "7px 0 0 0" }}>
+                    Source: {readerSource}
+                  </p>
+
+                  <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                    <textarea
+                      value={highlightQuote}
+                      onChange={(event) => setHighlightQuote(event.target.value)}
+                      rows={2}
+                      placeholder="Highlight quote"
+                      style={{
+                        width: "100%",
+                        fontFamily: FONT,
+                        fontSize: 13,
+                        color: T.ink,
+                        background: "rgba(255,255,255,.5)",
+                        border: `1px solid ${T.line}`,
+                        borderRadius: 10,
+                        padding: "8px 10px",
+                        resize: "vertical",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8 }}>
+                      <input
+                        value={highlightNote}
+                        onChange={(event) => setHighlightNote(event.target.value)}
+                        placeholder="Note"
+                        style={{
+                          minWidth: 0,
+                          fontFamily: FONT,
+                          fontSize: 13,
+                          color: T.ink,
+                          background: "rgba(255,255,255,.5)",
+                          border: `1px solid ${T.line}`,
+                          borderRadius: 10,
+                          padding: "8px 10px",
+                        }}
+                      />
+                      <select
+                        value={highlightColor}
+                        onChange={(event) => setHighlightColor(event.target.value as ItemHighlight["color"])}
+                        style={{
+                          fontFamily: FONT,
+                          fontSize: 12,
+                          color: T.ink,
+                          background: "rgba(255,255,255,.5)",
+                          border: `1px solid ${T.line}`,
+                          borderRadius: 10,
+                          padding: "8px 10px",
+                        }}
+                      >
+                        {["yellow", "green", "blue", "pink", "purple"].map((color) => (
+                          <option key={color} value={color}>
+                            {color}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void createHighlight()}
+                        disabled={!highlightQuote.trim() || highlightLoading}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontFamily: FONT,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: "#fff",
+                          background: T.azure,
+                          border: "none",
+                          borderRadius: 10,
+                          padding: "8px 11px",
+                          cursor: !highlightQuote.trim() || highlightLoading ? "not-allowed" : "pointer",
+                          opacity: !highlightQuote.trim() || highlightLoading ? 0.55 : 1,
+                        }}
+                      >
+                        <Highlighter size={13} />
+                        Save
+                      </button>
+                    </div>
+                    {highlights.length > 0 ? (
+                      <div style={{ display: "grid", gap: 7 }}>
+                        {highlights.map((entry) => (
+                          <div
+                            key={entry.id}
+                            style={{
+                              border: `1px solid ${highlightBorder(entry.color)}`,
+                              background: highlightBackground(entry.color),
+                              borderRadius: 10,
+                              padding: "8px 10px",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                              <p style={{ flex: 1, fontFamily: FONT, fontSize: 12.5, lineHeight: 1.5, color: T.ink, margin: 0 }}>
+                                {entry.quote}
+                              </p>
+                              <button
+                                type="button"
+                                aria-label="Delete highlight"
+                                onClick={() => void deleteHighlight(entry.id)}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  color: T.inkFaint,
+                                  cursor: "pointer",
+                                  padding: 2,
+                                }}
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+                            {entry.note ? (
+                              <p style={{ fontFamily: FONT, fontSize: 12, color: T.inkSoft, margin: "5px 0 0 0" }}>
+                                {entry.note}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           {/* AI Summary block */}
@@ -1056,4 +1551,74 @@ function getHostLabel(url: string | null | undefined) {
   } catch {
     return "link";
   }
+}
+
+function archiveStatusLabel(status: ArchiveItem["archive_status"]) {
+  if (status === "available") return "Archive snapshot saved";
+  if (status === "pending") return "Archive queued";
+  if (status === "processing") return "Archive running";
+  if (status === "failed") return "Archive failed";
+  return "No archive snapshot";
+}
+
+function archiveStatusDetail(item: ArchiveItem) {
+  if (item.link_broken) {
+    return item.link_http_status
+      ? `Link check failed with HTTP ${item.link_http_status}`
+      : item.link_failure_reason || "Link check failed";
+  }
+  if (item.archive_status === "available") {
+    return item.archive_last_attempt_at
+      ? `Captured ${new Date(item.archive_last_attempt_at).toLocaleString()}`
+      : "Sanitized HTML and text are stored.";
+  }
+  if (item.archive_status === "failed") {
+    return item.archive_last_error || "The page could not be archived.";
+  }
+  if (item.archive_status === "pending" || item.archive_status === "processing") {
+    return "The worker will save sanitized HTML and readable text.";
+  }
+  if (item.link_last_checked_at) {
+    return `Last checked ${new Date(item.link_last_checked_at).toLocaleString()}`;
+  }
+  return "Save a durable HTML snapshot for this URL.";
+}
+
+function readerToggleStyle(active: boolean, color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: FONT,
+    fontSize: 12,
+    fontWeight: 700,
+    color: active ? color : T.inkSoft,
+    background: active ? `${color}14` : "rgba(255,255,255,.55)",
+    border: active ? `1px solid ${color}40` : `1px solid ${T.glassEdge}`,
+    borderRadius: 10,
+    padding: "7px 10px",
+    cursor: "pointer",
+  };
+}
+
+function highlightBorder(color: ItemHighlight["color"]) {
+  const colors: Record<ItemHighlight["color"], string> = {
+    yellow: "rgba(250,204,21,.45)",
+    green: "rgba(34,197,94,.35)",
+    blue: "rgba(59,130,246,.35)",
+    pink: "rgba(236,72,153,.35)",
+    purple: "rgba(168,85,247,.35)",
+  };
+  return colors[color];
+}
+
+function highlightBackground(color: ItemHighlight["color"]) {
+  const colors: Record<ItemHighlight["color"], string> = {
+    yellow: "rgba(250,204,21,.12)",
+    green: "rgba(34,197,94,.09)",
+    blue: "rgba(59,130,246,.09)",
+    pink: "rgba(236,72,153,.09)",
+    purple: "rgba(168,85,247,.09)",
+  };
+  return colors[color];
 }

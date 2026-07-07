@@ -1,4 +1,4 @@
-import { Pool, PoolConfig, type QueryResultRow } from "pg";
+import { Pool, type PoolConfig, type QueryResultRow } from "pg";
 import { env } from "@/lib/env";
 
 const poolConfig: PoolConfig = {

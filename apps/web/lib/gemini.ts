@@ -1,5 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/lib/env";
+import {
+  getCachedQueryEmbedding,
+  setCachedQueryEmbedding,
+} from "@/lib/query-embedding-cache";
 
 const client = env.GEMINI_API_KEY ? new GoogleGenerativeAI(env.GEMINI_API_KEY) : null;
 
@@ -39,4 +43,22 @@ export async function embedText(text: string) {
   const model = getGeminiEmbeddingModel();
   const result = await model.embedContent(normalized);
   return result.embedding.values;
+}
+
+export async function embedQueryText(text: string) {
+  const normalized = text.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const cached = await getCachedQueryEmbedding(normalized);
+  if (cached) {
+    return cached;
+  }
+
+  const embedding = await embedText(normalized);
+  if (embedding) {
+    await setCachedQueryEmbedding(normalized, embedding);
+  }
+  return embedding;
 }

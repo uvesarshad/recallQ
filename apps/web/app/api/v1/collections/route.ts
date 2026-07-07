@@ -1,6 +1,6 @@
 import { apiError, apiOk } from "@/lib/api";
 import { db } from "@/lib/db";
-import { requireSessionUser } from "@/lib/request-auth";
+import { requireSessionUser, requireUser } from "@/lib/request-auth";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,8 @@ const collectionSchema = z.object({
   icon: z.string().trim().max(50).optional(),
 });
 
-export async function GET() {
-  const user = await requireSessionUser();
+export async function GET(req: Request) {
+  const user = await requireUser(req);
   if (!user) {
     return apiError("Unauthorized", 401);
   }

@@ -1,7 +1,10 @@
 import { apiError, apiOk } from "@/lib/api";
+import { deleteArchiveAssetsForItems } from "@/lib/archive-assets";
 import { db } from "@/lib/db";
-import { requireSessionUser, requireUser } from "@/lib/request-auth";
+import { recordItemTombstones } from "@/lib/item-tombstones";
+import { requireUser } from "@/lib/request-auth";
 import { deleteFile } from "@/lib/storage";
+import { enqueueWebhookEvent } from "@/lib/webhooks";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +13,7 @@ const itemUpdateSchema = z.object({
   title: z.string().trim().max(200).optional(),
   summary: z.string().trim().max(2000).nullable().optional(),
   tags: z.array(z.string()).optional(),
+  capture_note: z.string().trim().max(2000).nullable().optional(),
   collection_id: z.string().uuid().nullable().optional(),
   reminder_at: z.string().datetime().nullable().optional(),
   canvas_x: z.number().finite().optional(),
@@ -21,7 +25,7 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireSessionUser();
+  const user = await requireUser(req);
   if (!user) {
     return apiError("Unauthorized", 401);
   }
@@ -32,7 +36,13 @@ export async function GET(
             items.raw_url, items.raw_text, items.collection_id, collections.name AS collection_name,
             items.canvas_x, items.canvas_y, items.canvas_pinned,
             enriched, enriched_at, reminder_at, reminder_sent,
-            file_name, file_mime_type, capture_note, image_url
+            file_name, file_mime_type, capture_note, image_url, blur_data_url,
+            archive_requested_at, archive_status, archive_last_error, archive_last_attempt_at,
+            link_last_checked_at, link_http_status, link_broken, link_failure_reason,
+            link_review_status, link_reviewed_at, link_review_note,
+            reading_progress, reading_state, reader_position,
+            is_favorite, is_archived, is_read_later,
+            reading_started_at, reading_completed_at
      FROM items
      LEFT JOIN collections ON collections.id = items.collection_id
      WHERE items.id = $1 AND items.user_id = $2`,
@@ -50,7 +60,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireSessionUser();
+  const user = await requireUser(req);
   if (!user) {
     return apiError("Unauthorized", 401);
   }
@@ -75,7 +85,20 @@ export async function PATCH(
     updates.push(`tags = $${idx++}`);
     values.push(data.tags);
   }
+  if (data.capture_note !== undefined) {
+    updates.push(`capture_note = $${idx++}`);
+    values.push(data.capture_note);
+  }
   if (data.collection_id !== undefined) {
+    if (data.collection_id) {
+      const collectionCheck = await db.query(
+        "SELECT id FROM collections WHERE id = $1 AND user_id = $2",
+        [data.collection_id, user.id]
+      );
+      if (collectionCheck.rowCount === 0) {
+        return apiError("Collection not found or not owned by user", 404);
+      }
+    }
     updates.push(`collection_id = $${idx++}`);
     values.push(data.collection_id);
   }
@@ -127,6 +150,18 @@ export async function PATCH(
     }
   }
 
+  await enqueueWebhookEvent({
+    userId: user.id,
+    event: "item.updated",
+    itemId: id,
+    data: {
+      id,
+      fields: Object.keys(data),
+    },
+  }).catch((error) => {
+    console.warn("Failed to enqueue item.updated webhook", error);
+  });
+
   return apiOk({ success: true });
 }
 
@@ -143,7 +178,7 @@ export async function DELETE(
   const { id } = await params;
 
   const fileRow = await db.query(
-    "SELECT file_path FROM items WHERE id = $1 AND user_id = $2",
+    "SELECT file_path, type, title, raw_url FROM items WHERE id = $1 AND user_id = $2",
     [id, user.id]
   );
 
@@ -151,12 +186,28 @@ export async function DELETE(
     return apiError("Item not found or not owned by user", 404);
   }
 
+  await recordItemTombstones(user.id, [id]);
+  await deleteArchiveAssetsForItems(user.id, [id]);
   await db.query("DELETE FROM items WHERE id = $1 AND user_id = $2", [id, user.id]);
 
   const filePath = fileRow.rows[0].file_path as string | null;
   if (filePath) {
     await deleteFile(user.id, filePath);
   }
+
+  await enqueueWebhookEvent({
+    userId: user.id,
+    event: "item.deleted",
+    itemId: null,
+    data: {
+      id,
+      type: fileRow.rows[0].type,
+      title: fileRow.rows[0].title,
+      raw_url: fileRow.rows[0].raw_url,
+    },
+  }).catch((error) => {
+    console.warn("Failed to enqueue item.deleted webhook", error);
+  });
 
   return apiOk({ success: true });
 }

@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["TEAMID.ai.montr.recallq"],
+        "components": [
+          {
+            "/": "/item/*",
+            "comment": "Replace TEAMID with the Apple Developer Team ID before production deployment."
+          }
+        ]
+      }
+    ]
+  }
+}

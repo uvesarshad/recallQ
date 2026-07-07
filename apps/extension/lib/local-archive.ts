@@ -18,6 +18,14 @@ export type LocalItem = {
   summary: string | null;
   tags: string[] | null;
   imageUrl: string | null;
+  collectionId?: string | null;
+  collectionName?: string | null;
+  reminderAt?: string | null;
+  reminderSent?: boolean | null;
+  archiveStatus?: "not_requested" | "pending" | "processing" | "available" | "failed" | null;
+  archiveRequestedAt?: string | null;
+  archiveLastError?: string | null;
+  linkBroken?: boolean | null;
   createdAt: string; // ISO
   updatedAt: string; // ISO — drives sync ordering
   deleted: boolean; // tombstone, retained until its delete is pushed
@@ -182,6 +190,7 @@ export async function getDirty(): Promise<LocalItem[]> {
 export async function applySyncResults(opts: {
   pushed?: { localId: string; serverId: string }[];
   deletedPushed?: string[]; // localIds whose delete was accepted by the server
+  deletedRemote?: RemoteDelete[];
   pulled?: RemoteUpsert[];
 }): Promise<void> {
   let items = await getAll();
@@ -205,6 +214,11 @@ export async function applySyncResults(opts: {
     upsertRemote(items, remote);
   }
 
+  if (opts.deletedRemote?.length) {
+    const deletedIds = new Set(opts.deletedRemote.map((item) => item.serverId));
+    items = items.filter((item) => !item.serverId || !deletedIds.has(item.serverId));
+  }
+
   await writeAll(items);
 }
 
@@ -217,8 +231,21 @@ export type RemoteUpsert = {
   summary: string | null;
   tags: string[] | null;
   imageUrl: string | null;
+  collectionId: string | null;
+  collectionName: string | null;
+  reminderAt: string | null;
+  reminderSent: boolean | null;
+  archiveStatus: "not_requested" | "pending" | "processing" | "available" | "failed" | null;
+  archiveRequestedAt: string | null;
+  archiveLastError: string | null;
+  linkBroken: boolean | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type RemoteDelete = {
+  serverId: string;
+  deletedAt: string;
 };
 
 // Merge a server item into the local list. Three cases:
@@ -238,6 +265,14 @@ function upsertRemote(items: LocalItem[], remote: RemoteUpsert): void {
     byId.summary = remote.summary;
     byId.tags = remote.tags;
     byId.imageUrl = remote.imageUrl;
+    byId.collectionId = remote.collectionId;
+    byId.collectionName = remote.collectionName;
+    byId.reminderAt = remote.reminderAt;
+    byId.reminderSent = remote.reminderSent;
+    byId.archiveStatus = remote.archiveStatus;
+    byId.archiveRequestedAt = remote.archiveRequestedAt;
+    byId.archiveLastError = remote.archiveLastError;
+    byId.linkBroken = remote.linkBroken;
     byId.updatedAt = remote.updatedAt;
     return;
   }
@@ -253,6 +288,14 @@ function upsertRemote(items: LocalItem[], remote: RemoteUpsert): void {
       byUrl.summary = remote.summary;
       byUrl.tags = remote.tags;
       byUrl.imageUrl = remote.imageUrl;
+      byUrl.collectionId = remote.collectionId;
+      byUrl.collectionName = remote.collectionName;
+      byUrl.reminderAt = remote.reminderAt;
+      byUrl.reminderSent = remote.reminderSent;
+      byUrl.archiveStatus = remote.archiveStatus;
+      byUrl.archiveRequestedAt = remote.archiveRequestedAt;
+      byUrl.archiveLastError = remote.archiveLastError;
+      byUrl.linkBroken = remote.linkBroken;
       byUrl.updatedAt = remote.updatedAt;
       byUrl.dirty = false; // reconciled with the server copy
       return;
@@ -269,6 +312,14 @@ function upsertRemote(items: LocalItem[], remote: RemoteUpsert): void {
     summary: remote.summary,
     tags: remote.tags,
     imageUrl: remote.imageUrl,
+    collectionId: remote.collectionId,
+    collectionName: remote.collectionName,
+    reminderAt: remote.reminderAt,
+    reminderSent: remote.reminderSent,
+    archiveStatus: remote.archiveStatus,
+    archiveRequestedAt: remote.archiveRequestedAt,
+    archiveLastError: remote.archiveLastError,
+    linkBroken: remote.linkBroken,
     createdAt: remote.createdAt,
     updatedAt: remote.updatedAt,
     deleted: false,

@@ -26,8 +26,39 @@ export interface ArchiveItem {
   capture_note?: string | null;
   image_url?: string | null;
   blur_data_url?: string | null;
+  archive_requested_at?: string | null;
+  archive_status?: "not_requested" | "pending" | "processing" | "available" | "failed" | null;
+  archive_last_error?: string | null;
+  archive_last_attempt_at?: string | null;
+  link_last_checked_at?: string | null;
+  link_http_status?: number | null;
+  link_broken?: boolean | null;
+  link_failure_reason?: string | null;
+  link_review_status?: "unreviewed" | "needs_review" | "retrying" | "false_positive" | "resolved" | null;
+  link_reviewed_at?: string | null;
+  link_review_note?: string | null;
+  reading_progress?: number | null;
+  reading_state?: "unread" | "reading" | "read" | null;
+  reader_position?: string | null;
+  is_favorite?: boolean | null;
+  is_archived?: boolean | null;
+  is_read_later?: boolean | null;
+  reading_started_at?: string | null;
+  reading_completed_at?: string | null;
   snippet?: string | null;
   similarity?: number;
+}
+
+export interface ItemHighlight {
+  id: string;
+  item_id: string;
+  quote: string;
+  note?: string | null;
+  color: "yellow" | "green" | "blue" | "pink" | "purple";
+  range_start?: number | null;
+  range_end?: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ArchiveComment {

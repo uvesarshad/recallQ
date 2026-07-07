@@ -4,12 +4,12 @@ import { parseBody } from "@/lib/api-response";
 import { db } from "@/lib/db";
 import { getChatQueryLimit } from "@/lib/plan-limits";
 import { rateLimit } from "@/lib/rate-limit";
-import { requireSessionUser } from "@/lib/request-auth";
+import { requireUser } from "@/lib/request-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const user = await requireSessionUser();
+  const user = await requireUser(req);
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }

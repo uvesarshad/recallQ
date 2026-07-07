@@ -91,10 +91,10 @@ export default async function AppFeedPage({
 
   try {
     if (searchQuery) {
-      const result = await runSearch(session.user.id, searchQuery, "hybrid");
+      const result = await runSearch(session.user.id, searchQuery, "hybrid", { limit: INITIAL_ITEMS_LIMIT });
       items = result.items;
-      hasMore = false;
-      nextCursor = null;
+      hasMore = result.hasMore;
+      nextCursor = result.nextCursor;
     } else {
       const itemsResult = await getItems(session.user.id);
       items = itemsResult.items;

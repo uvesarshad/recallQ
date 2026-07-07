@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileUp, ListPlus, Sparkles, X } from "lucide-react";
+import { Archive, FileUp, ListPlus, Sparkles, X } from "lucide-react";
 import ActionPreview, { type ActionOverrideValue, type ActionPreviewValue } from "@/components/ActionPreview";
 import { dispatchArchiveItemCreated, dispatchArchiveItemsChanged } from "@/lib/archive-events";
 import { useModalA11y } from "@/lib/use-modal-a11y";
@@ -28,7 +28,7 @@ type BulkImportItem = {
   source: "manual";
 };
 
-function buildSinglePayload(value: string, overrides: ActionOverrideValue) {
+function buildSinglePayload(value: string, overrides: ActionOverrideValue, archivePage: boolean) {
   const trimmed = value.trim();
   const urlMatch = trimmed.match(/https?:\/\/[^\s]+/);
 
@@ -39,6 +39,7 @@ function buildSinglePayload(value: string, overrides: ActionOverrideValue) {
     capture_note: trimmed,
     actionOverrides: overrides,
     source: "manual" as const,
+    archive_page: Boolean(urlMatch && archivePage),
   };
 }
 
@@ -69,6 +70,7 @@ export default function CreateItemDialog() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [archivePage, setArchivePage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -162,7 +164,7 @@ export default function CreateItemDialog() {
         body: JSON.stringify(
           mode === "bulk"
             ? { items: bulkItems }
-            : buildSinglePayload(content, overrides),
+            : buildSinglePayload(content, overrides, archivePage),
         ),
       });
       if (!response.ok) throw new Error("Failed to create item");
@@ -172,6 +174,7 @@ export default function CreateItemDialog() {
       setContent("");
       setPreview(null);
       setOverrides({});
+      setArchivePage(false);
       if (mode === "bulk") {
         dispatchArchiveItemsChanged();
       } else if (data.id) {
@@ -185,6 +188,7 @@ export default function CreateItemDialog() {
   }
 
   const containerRef = useModalA11y(open);
+  const singleUrlMatch = mode === "single" ? content.trim().match(/https?:\/\/[^\s]+/) : null;
 
   if (!open) return null;
 
@@ -225,10 +229,10 @@ export default function CreateItemDialog() {
             >
               Single
             </button>
-            <button
-              aria-pressed={mode === "bulk"}
+              <button
+                aria-pressed={mode === "bulk"}
               className={`inline-flex items-center gap-2 rounded-buttons px-3 py-1.5 transition ${mode === "bulk" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
-              onClick={() => { setMode("bulk"); setPreview(null); setOverrides({}); }}
+              onClick={() => { setMode("bulk"); setPreview(null); setOverrides({}); setArchivePage(false); }}
               type="button"
             >
               <ListPlus className="h-4 w-4" />
@@ -237,7 +241,7 @@ export default function CreateItemDialog() {
             <button
               aria-pressed={mode === "file"}
               className={`inline-flex items-center gap-2 rounded-buttons px-3 py-1.5 transition ${mode === "file" ? "bg-brand text-white" : "text-text-muted hover:text-text-primary"}`}
-              onClick={() => { setMode("file"); setPreview(null); setOverrides({}); setFileError(null); }}
+              onClick={() => { setMode("file"); setPreview(null); setOverrides({}); setArchivePage(false); setFileError(null); }}
               type="button"
             >
               <FileUp className="h-4 w-4" />
@@ -310,6 +314,23 @@ export default function CreateItemDialog() {
                 </div>
                 <p>Use phrases like `remind me this on 30 Jan`, `folder: work`, `tags: design, research`, or hashtags like `#product`.</p>
               </div>
+              {singleUrlMatch ? (
+                <label className="flex items-center justify-between gap-4 rounded-cards border border-border bg-bg p-4 text-sm">
+                  <span className="inline-flex min-w-0 items-center gap-3 text-text-primary">
+                    <Archive className="h-4 w-4 shrink-0 text-brand" />
+                    <span className="min-w-0">
+                      <span className="block font-medium">Archive page HTML</span>
+                      <span className="block text-xs text-text-muted">Save a durable sanitized snapshot in the background.</span>
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={archivePage}
+                    onChange={(event) => setArchivePage(event.target.checked)}
+                    className="h-4 w-4 accent-brand"
+                  />
+                </label>
+              ) : null}
               {preview ? <ActionPreview preview={preview} overrides={overrides} onChange={setOverrides} /> : null}
             </>
           ) : (

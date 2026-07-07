@@ -3,7 +3,7 @@
 > Scope: Documents subscription plan tiers, Razorpay integrations, subscription webhooks, settings routing, and user profiles.
 > Rendering context: Isomorphic
 > Project tier: 4
-> Last updated: 2026-05-17
+> Last updated: 2026-07-07
 
 ## Overview
 The Billing and Settings module regulates Recall's subscription lifecycle, settings panel routing, and user preference profiles. It handles commercial plan tier allocations, Razorpay payments widgets, payment webhook verifications, and links external channels like Telegram bots inside user integration pages.
@@ -18,16 +18,19 @@ Recall structures operations around three user levels configured in lib/plan-lim
 - Self-Hosted Bypass: If SELF_HOSTED is set to true, all active plan limits checks bypass commercial restrictions and assign infinite bounds, hiding payment controls.
 
 ### Razorpay Payments Integration (lib/billing.ts)
-- Creating Subscriptions: Handled in app/api/payments/create-subscription/route.ts. Initiates transactional subscription payloads using standard merchant endpoint fetches, returning Razorpay transaction tokens.
-- Cancelling Subscriptions: Handled in app/api/payments/cancel-subscription/route.ts. Submits cancellation requests to stop payments at the active cycle's close.
-- Webhook Listener: Handled in app/api/payments/webhook/route.ts. Validates signatures using verifyHostedWebhook against the secret in RAZORPAY_WEBHOOK_SECRET. It then parses Razorpay payloads, updates plan limits, and maps renewal timestamps inside the users table.
+- Creating Subscriptions: Handled in `apps/web/app/api/v1/payments/create-subscription/route.ts`. Initiates Razorpay subscription payloads and returns checkout data.
+- Cancelling Subscriptions: Handled in `apps/web/app/api/v1/payments/cancel-subscription/route.ts`. Cancels the active Razorpay or Stripe subscription at the provider.
+- Razorpay Webhook Listener: Handled in `apps/web/app/api/v1/payments/webhook/route.ts`. Validates signatures with `RAZORPAY_WEBHOOK_SECRET`, updates plan fields, and maps renewal timestamps inside the users table.
+- Stripe Endpoints: `apps/web/app/api/v1/payments/stripe/checkout/route.ts`, `portal/route.ts`, and `webhook/route.ts` cover Checkout, customer portal, and signature-verified Stripe subscription events.
 
 ### Settings Routing and Workspace Views
 Settings are grouped into a clean multi-tab layout using the components/SettingsNav.tsx control sidebar:
-- Settings Redirects: General alias links (such as /settings or /app/settings) are caught and redirected server-side to canonical tab layouts to prevent broken route flows.
-- Profile Settings (/app/settings/profile): Allows updating names, biographies, default timezone parameters, and user marketing consents via PATCH calls to api/user.
-- Billing Settings (/app/settings/billing): Displays current monthly save usage counters, active subscription statuses, billing renewal dates, and mounts Razorpay payment widgets.
-- Integrations Settings (/app/settings/integrations): Lists the custom inbound capture email address, generates unique Telegram bot pairing tokens, displays linking instructions, and registers bot webhooks.
+- Settings Redirects: `/app/settings` resolves to `/app/settings/profile`; legacy root settings URLs are redirected in `apps/web/next.config.mjs`.
+- Profile Settings (`/app/settings/profile`): Allows updating profile fields via versioned user routes.
+- Folders Settings (`/app/settings/folders`): Owns folder listing, inline edits, colors/icons, and deletion.
+- Integrations Settings (`/app/settings/integrations`): Lists the inbound capture email address, Telegram connection state, and setup actions.
+- Billing Settings (`/app/settings/billing`): Displays save usage, active subscription status, renewal dates, and payment actions.
+- Appearance Settings (`/app/settings/appearance`): Provides the richer three-option theme picker.
 
 ## Security Constraints
 - AGENT AVOID: Never rely on client-supplied plan levels or saves counts. Usage audits must strictly query verified Postgres data before allowing ingestion writes.
@@ -43,5 +46,5 @@ Settings are grouped into a clean multi-tab layout using the components/Settings
 - [docs/infra/environment.md](file:///e:/Projects/recallQ/docs/infra/environment.md) — Environment keys.
 - [docs/auth/authorization.md](file:///e:/Projects/recallQ/docs/auth/authorization.md) — Limit checks.
 
-AGENT OWNER: lib/billing.ts
+AGENT OWNER: apps/web/lib/billing.ts
 AGENT UPDATE: docs/modules/billing-settings.md

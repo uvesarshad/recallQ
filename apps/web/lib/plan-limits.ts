@@ -12,6 +12,7 @@ export const PLAN_LIMITS = {
     emailIngest: false,
     chatQueriesPerDay: 20,
     cloudSync: false,
+    customAiPrompts: false,
   },
   starter: {
     maxSavesPerMonth: 100,
@@ -21,6 +22,7 @@ export const PLAN_LIMITS = {
     emailIngest: true,
     chatQueriesPerDay: 50,
     cloudSync: true,
+    customAiPrompts: false,
   },
   pro: {
     maxSavesPerMonth: Infinity,
@@ -30,6 +32,7 @@ export const PLAN_LIMITS = {
     emailIngest: true,
     chatQueriesPerDay: Infinity,
     cloudSync: true,
+    customAiPrompts: true,
   },
 };
 
@@ -41,6 +44,7 @@ const SELF_HOSTED_LIMITS = {
   emailIngest: true,
   chatQueriesPerDay: Infinity,
   cloudSync: true,
+  customAiPrompts: true,
 };
 
 function isSelfHostedMode() {
@@ -74,4 +78,8 @@ export function getChatQueryLimit(plan: Plan) {
 
 export function getMaxReminders(plan: Plan) {
   return getPlanLimits(plan).maxReminders;
+}
+
+export function canUseCustomAiPrompts(plan: Plan) {
+  return getPlanLimits(plan).customAiPrompts;
 }

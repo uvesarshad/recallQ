@@ -8,8 +8,9 @@ export const ingestPayloadSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(50)).max(10).optional().default([]),
   capture_note: z.string().trim().max(500).nullable().optional(),
   reminder_at: z.string().datetime().nullable().optional(),
-  source: z.enum(["web", "pwa-share", "telegram", "email", "extension", "mobile", "manual"]),
+  source: z.enum(["web", "pwa-share", "telegram", "email", "extension", "mobile", "rss", "manual"]),
   collection_id: z.string().uuid().nullable().optional(),
+  archive_page: z.boolean().optional().default(false),
 });
 
 export const bulkIngestPayloadSchema = z.object({

@@ -23,7 +23,7 @@ Recall utilizes a Zod validation schema inside lib/env.ts to enforce exact types
 - TELEGRAM_BOT_TOKEN: Server-side bot token from Telegram. Consumed in lib/telegram.ts to verify webhook signatures and post messages. Optional.
 - TELEGRAM_WEBHOOK_SECRET: Server-side secret used to secure Telegram webhook callbacks. Optional.
 - TELEGRAM_BOT_USERNAME: Server-side username of the registered bot. Defaults to RecallBot. Optional.
-- RESEND_API_KEY: Server-side API key for the Resend mailer. Consumed in workers/reminder-worker.ts, email route handlers, and auth reset actions to deliver email reminders, transactional messages, and password reset links. Optional.
+- RESEND_API_KEY: Server-side API key for the Resend mailer. Consumed in `apps/web/workers/reminder-worker.ts`, email route handlers, and auth reset actions to deliver email reminders, transactional messages, and password reset links. Optional.
 - RESEND_INBOUND_SECRET: Server-side key used to secure inbound email ingestion webhooks. Optional.
 - RESEND_WEBHOOK_SECRET: Server-side webhook authentication secret from Resend. Optional.
 - RESEND_FROM_EMAIL: Server-side default sender email address for Resend notifications and password reset emails. Optional.
@@ -58,6 +58,16 @@ These are consumed by `apps/mobile` at Metro bundle time and are not validated b
 - EXPO_PUBLIC_WEB_URL: Optional mobile web base URL. If absent in development, it follows the same Metro host and port 3008 derivation.
 - EXPO_PUBLIC_EAS_PROJECT_ID: Optional Expo project ID used for push token registration in development builds. Push registration is skipped in Expo Go.
 - EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID / EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID / EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: Optional Google OAuth client IDs that enable the Google sign-in button in the Expo app.
+
+Native mobile build profiles live in `apps/mobile/eas.json`. Configure these `EXPO_PUBLIC_*` values in EAS for development, preview, and production builds.
+
+## Operator Script Variables
+These variables are consumed by root scripts and are not validated by `apps/web/lib/env.ts`:
+- RECALL_API_URL: Optional base URL for `scripts/recall-cli.mjs`. Defaults to `http://localhost:3008/api/v1`.
+- RECALL_TOKEN: Personal access token used by `scripts/recall-cli.mjs` for bearer-authenticated API calls.
+- RECALL_CONFIG: Optional config file path for `scripts/recall-cli.mjs`. Defaults to `~/.config/recallq/config.json`.
+- RECALL_API_URL / RECALL_TOKEN: Also consumed by `scripts/recall-mcp-server.mjs`.
+- DATABASE_URL: Also consumed by `scripts/admin-jobs.mjs` for queue inspection, retries, enrichment requeue, URL-host backfill, and operation summaries.
 
 ## Security Constraints
 - AGENT AVOID: Never expose secret keys to the browser. Only NEXT_PUBLIC_RAZORPAY_KEY_ID is public-safe. All other secrets are strictly server-side.

@@ -6,14 +6,14 @@
 > Last updated: 2026-05-22
 
 ## Overview
-Recall is a pnpm + Turborepo monorepo. The Next.js web app, future Chrome extension, and future mobile app each live under `apps/`. Shared TypeScript packages (API schemas, typed client, core helpers) will live under `packages/`. Centralized infrastructure (SQL migrations, DB scripts, top-level docs) stays at the workspace root because both the web app and the workers run against the same database.
+Recall is a pnpm + Turborepo monorepo. The Next.js web app, Chrome extension, and mobile app each live under `apps/`. Shared TypeScript packages live under `packages/`. Centralized infrastructure (SQL migrations, DB scripts, top-level docs) stays at the workspace root because both the web app and the workers run against the same database.
 
 ## Workspace Directory Map
 
 - apps/: One folder per deployable app.
   - apps/web: The Next.js 14 App Router application (current ship target).
     - apps/web/app: Routing layouts, endpoints, and views.
-      - apps/web/app/api: Server-side REST API handlers (will move to apps/web/app/api/v1 in Stage 1 of [PLAN.md](file:///e:/Projects/recallQ/PLAN.md)).
+      - apps/web/app/api/v1: Versioned REST API handlers. NextAuth remains at `apps/web/app/api/auth`.
       - apps/web/app/(app): Route group containing the primary authenticated application shell.
         - apps/web/app/(app)/app: Nested folder structure serving the core dashboard routes (e.g. canvas, chat, settings).
       - apps/web/app/(auth): Public auth pages for /login, /signup, /forgot-password, and /reset-password.
@@ -29,7 +29,7 @@ Recall is a pnpm + Turborepo monorepo. The Next.js web app, future Chrome extens
 - packages/: Internal TypeScript packages consumed by apps.
   - packages/api-schema: Zod schemas + types for every `/api/v1/*` request/response shape, shared between web and non-web clients. Stage 1 of [PLAN.md](file:///e:/Projects/recallQ/PLAN.md).
   - packages/api-client: Typed REST client for non-web clients (Chrome extension today, mobile later). Created in Stage 8.
-- migrations/: Relational SQL migrations numbered sequentially (001_initial.sql … 010_password_reset_tokens.sql). Run via `pnpm db:migrate` from the workspace root.
+- migrations/: Relational SQL migrations numbered sequentially. Run via `pnpm db:migrate` or `pnpm db:migrate:latest` from the workspace root.
 - scripts/: DB migrate runner and Telegram webhook registration. Stay at root so they sit alongside `migrations/`.
 - docs/: This documentation directory. Lives at the workspace root because it describes the system as a whole.
 - pnpm-workspace.yaml: Lists `apps/*` and `packages/*` as workspaces and approves native build dependencies (esbuild, sharp, unrs-resolver).
@@ -38,7 +38,7 @@ Recall is a pnpm + Turborepo monorepo. The Next.js web app, future Chrome extens
 
 ## Naming Conventions
 - React Components: Always PascalCase (e.g. CaptureBar.tsx, AppShell.tsx) located in `apps/web/components`.
-- Routes and Directories: Always kebab-case or brackets for dynamic parameters (e.g. `apps/web/app/api/payments/create-subscription`, `apps/web/app/api/items/[id]`).
+- Routes and Directories: Always kebab-case or brackets for dynamic parameters (e.g. `apps/web/app/api/v1/payments/create-subscription`, `apps/web/app/api/v1/items/[id]`).
 - Core Helper Libraries: Always kebab-case or camelCase (e.g. `apps/web/lib/plan-limits.ts`, `apps/web/lib/request-auth.ts`).
 - Database Migration Files: Prefixed with three-digit sequential padding (e.g. 001_initial.sql).
 - Background Workers: Kebab-case (e.g. `apps/web/workers/enrichment-worker.ts`).

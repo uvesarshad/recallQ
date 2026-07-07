@@ -1,11 +1,6 @@
 // Two-way cloud sync (paid). Push the local archive to the server, then pull
 // cross-device changes back. The local store stays the device source of truth;
 // this just reconciles it with the cloud.
-//
-// Gated by `cloudSyncEnabled` + a stored token + a paid plan. The server is the
-// real backstop: `ingestItem` still enforces per-plan monthly save caps, so a
-// large backfill on a capped plan (e.g. Starter 100/mo) syncs what it can and
-// leaves the rest `dirty` to retry — surfaced, never silently dropped.
 
 import { RecallApiError } from "@recall/api-client";
 import type { IngestItemInput, ListItem } from "@recall/api-client";
@@ -17,20 +12,21 @@ import {
   applySyncResults,
   getDirty,
   type LocalItem,
+  type RemoteDelete,
   type RemoteUpsert,
 } from "./local-archive";
 
-const CURSOR_KEY = "recallq.sync.cursor"; // last pulled updated_at
-const LOCK_KEY = "recallq.sync.inflight"; // soft cross-context lock
-const PUSH_CHUNK = 100; // server bulk-ingest cap
-const MAX_PULL_PAGES = 50; // safety bound per run; resumes next run via cursor
+const CURSOR_KEY = "recallq.sync.cursor";
+const LOCK_KEY = "recallq.sync.inflight";
+const PUSH_CHUNK = 100;
+const MAX_PULL_PAGES = 50;
 const EPOCH = "1970-01-01T00:00:00.000Z";
 
 export type SyncOutcome = {
   ok: boolean;
   pushed: number;
   pulled: number;
-  pending: number; // dirty items still unpushed (e.g. plan cap reached)
+  pending: number;
   reason?: "disabled" | "locked" | "error";
 };
 
@@ -51,9 +47,9 @@ export async function runSync(): Promise<SyncOutcome> {
 
   try {
     const { pushed, deletedPushed, pending } = await pushDirty();
-    const pulled = await pullChanges();
-    await applySyncResults({ pushed, deletedPushed, pulled });
-    return { ok: true, pushed: pushed.length, pulled: pulled.length, pending };
+    const { upserts, deletes } = await pullChanges();
+    await applySyncResults({ pushed, deletedPushed, pulled: upserts, deletedRemote: deletes });
+    return { ok: true, pushed: pushed.length, pulled: upserts.length + deletes.length, pending };
   } catch {
     return { ok: false, pushed: 0, pulled: 0, pending: 0, reason: "error" };
   } finally {
@@ -88,20 +84,12 @@ async function pushDirty(): Promise<{
   const dirty = await getDirty();
   const toCreate = dirty.filter((i) => !i.deleted && !i.serverId);
   const toDelete = dirty.filter((i) => i.deleted && i.serverId);
-  // Already-synced items edited locally (e.g. a re-saved URL): there's no cloud
-  // update path via ingest without creating a duplicate, so we clear `dirty`
-  // without re-pushing. (v1 cut — server keeps the prior copy.)
-  const toClear = dirty.filter((i) => !i.deleted && i.serverId);
+  const toUpdate = dirty.filter((i) => !i.deleted && i.serverId);
 
-  const pushed: { localId: string; serverId: string }[] = toClear.map((i) => ({
-    localId: i.localId,
-    serverId: i.serverId as string,
-  }));
+  const pushed: { localId: string; serverId: string }[] = [];
   const deletedPushed: string[] = [];
   let pending = 0;
 
-  // Create — chunked. A plan-cap 402 stops the push; remaining items stay
-  // dirty and the just-created ones reconcile by URL on the pull.
   for (let i = 0; i < toCreate.length; i += PUSH_CHUNK) {
     const chunk = toCreate.slice(i, i + PUSH_CHUNK);
     try {
@@ -111,14 +99,13 @@ async function pushDirty(): Promise<{
       });
     } catch (err) {
       if (err instanceof RecallApiError && err.status === 402) {
-        pending += toCreate.length - i; // this chunk + everything after
+        pending += toCreate.length - i;
         break;
       }
       throw err;
     }
   }
 
-  // Delete — propagate local deletes; treat a 404 as already gone.
   for (const item of toDelete) {
     try {
       await apiClient.items.delete(item.serverId as string);
@@ -132,25 +119,37 @@ async function pushDirty(): Promise<{
     }
   }
 
+  for (const item of toUpdate) {
+    await apiClient.items.update(item.serverId as string, {
+      title: item.title ?? undefined,
+      capture_note: item.note,
+      tags: item.tags ?? undefined,
+      collection_id: "collectionId" in item ? item.collectionId ?? null : undefined,
+      reminder_at: "reminderAt" in item ? item.reminderAt ?? null : undefined,
+    });
+    pushed.push({ localId: item.localId, serverId: item.serverId as string });
+  }
+
   return { pushed, deletedPushed, pending };
 }
 
-async function pullChanges(): Promise<RemoteUpsert[]> {
+async function pullChanges(): Promise<{ upserts: RemoteUpsert[]; deletes: RemoteDelete[] }> {
   let since = (await getCursor()) || EPOCH;
-  const pulled: RemoteUpsert[] = [];
+  const upserts: RemoteUpsert[] = [];
+  const deletes: RemoteDelete[] = [];
 
   for (let page = 0; page < MAX_PULL_PAGES; page++) {
     const res = await apiClient.items.list({ since, limit: PUSH_CHUNK });
-    for (const it of res.items) pulled.push(toRemoteUpsert(it));
-    if (res.items.length > 0) {
-      since = res.items[res.items.length - 1].updated_at;
+    for (const it of res.items) upserts.push(toRemoteUpsert(it));
+    for (const it of res.deletedItems ?? []) {
+      deletes.push({ serverId: it.id, deletedAt: it.deleted_at });
     }
+    if (res.nextCursor) since = res.nextCursor;
     if (!res.hasMore || !res.nextCursor) break;
-    since = res.nextCursor; // server returns last updated_at as the cursor
   }
 
   await setCursor(since);
-  return pulled;
+  return { upserts, deletes };
 }
 
 function toRemoteUpsert(it: ListItem): RemoteUpsert {
@@ -163,6 +162,14 @@ function toRemoteUpsert(it: ListItem): RemoteUpsert {
     summary: it.summary,
     tags: it.tags,
     imageUrl: it.image_url,
+    collectionId: it.collection_id,
+    collectionName: it.collection_name,
+    reminderAt: it.reminder_at,
+    reminderSent: it.reminder_sent,
+    archiveStatus: it.archive_status,
+    archiveRequestedAt: it.archive_requested_at,
+    archiveLastError: it.archive_last_error,
+    linkBroken: it.link_broken,
     createdAt: it.created_at,
     updatedAt: it.updated_at,
   };
@@ -177,8 +184,6 @@ async function setCursor(value: string): Promise<void> {
   await chrome.storage.local.set({ [CURSOR_KEY]: value });
 }
 
-// Soft lock: a timestamp in session storage, auto-expiring so a crashed sync
-// can't wedge future runs.
 async function acquireLock(): Promise<boolean> {
   const res = await chrome.storage.session.get(LOCK_KEY);
   const at = res[LOCK_KEY];

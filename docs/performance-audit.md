@@ -12,8 +12,10 @@
 | `GET /api/v1/search` | FTS + optional semantic merge | `idx_items_tsv`, `idx_items_embedding` | Falls back when vector support is unavailable. |
 | `POST /api/v1/chat` | semantic retrieval + Gemini stream | `idx_items_embedding` | Rate-limited 30/user/hour. |
 | `POST /api/v1/ingest` | user row lock + item/reminder writes | `users` PK, `collections` lookup | Save/storage accounting is transactional. |
-| Enrichment worker | pending item scan | `idx_items_pending_enrichment` | Migration 018 keeps backlog scans tight. |
+| Enrichment worker | pending item scan | `idx_items_pending_enrichment`, `idx_items_enrichment_claim` | Migrations 018/020 keep backlog scans and claims tight. |
+| Same-host relations | user + URL host lookup | `idx_items_user_url_host` | Migration 022 avoids repeated `raw_url` string parsing in SQL. |
 | Reminder worker | due reminder scan | `idx_reminders_due` | Partial index on unsent reminders. |
+| Future job workers | pending/retrying job claim | `idx_jobs_claim` | Migration 023 provides a durable queue table before workers are split by type. |
 | OAuth sign-in | provider lookup | `idx_accounts_provider_lookup` | Added in migration 017. |
 | Push fan-out | active device tokens | `idx_device_push_tokens_user` | Partial active-token index. |
 
@@ -27,7 +29,7 @@
 ## Bundle and Lazy Loading
 - `output: "standalone"` is enabled in `apps/web/next.config.mjs`.
 - `@xyflow/react` is lazy-loaded only on `/app/canvas`.
-- `react-force-graph-2d` was removed.
+- The obsolete force-directed graph dependency was removed.
 - `optimizePackageImports` strips unused `lucide-react` icons.
 - Heavy parsing/AI dependencies stay server-side; do not import worker/server helpers from client components.
 - `pnpm analyze` is wired to `@next/bundle-analyzer`.
@@ -46,12 +48,12 @@
 - `items`, `item_relations`, files, and reminders grow with user archives.
 - `rate_limits` and expired password reset tokens are swept hourly by the reminder worker.
 - Revoked PATs and device push tokens remain for audit/visibility; consider periodic hard-delete later.
-- Durable archive assets, import sessions, and tombstones are still future work and should include explicit GC/index plans.
+- Durable archive assets and import sessions are still future work and should include explicit GC/index plans. Tombstones and the generic job table now have explicit indexes.
 
 ## Priority Follow-Ups
-1. Add worker claim/status columns before running multiple enrichment workers concurrently.
-2. Add server-side tombstones for delete propagation to local-first clients.
-3. Add normalized URL host column and `(user_id, url_host)` index for same-domain relation building.
+1. Move archive/import/webhook work onto `jobs` and split worker processes by job type.
+2. Add retention policy for server-side tombstones after sync windows are defined.
+3. Backfill `url_host` for historical malformed URLs if stricter URL normalization rules are added later.
 4. Add search pagination and query embedding cache.
 5. Extract heavy file parsing into a dedicated worker if file ingestion volume grows.
 6. Add Docker compose with Postgres + pgvector, web, and worker services.

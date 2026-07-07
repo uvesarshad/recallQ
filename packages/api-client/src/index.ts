@@ -114,8 +114,12 @@ export type ListItem = {
   updated_at: string;
   raw_url: string | null;
   raw_text: string | null;
+  capture_note: string | null;
   collection_id: string | null;
   collection_name: string | null;
+  canvas_x?: number | null;
+  canvas_y?: number | null;
+  canvas_pinned?: boolean | null;
   enriched: boolean;
   reminder_at: string | null;
   reminder_sent: boolean;
@@ -123,6 +127,19 @@ export type ListItem = {
   blur_data_url: string | null;
   file_name: string | null;
   file_mime_type: string | null;
+  archive_requested_at: string | null;
+  archive_status: "not_requested" | "pending" | "processing" | "available" | "failed" | null;
+  archive_last_error: string | null;
+  archive_last_attempt_at: string | null;
+  link_last_checked_at: string | null;
+  link_http_status: number | null;
+  link_broken: boolean | null;
+  link_failure_reason: string | null;
+};
+
+export type DeletedItem = {
+  id: string;
+  deleted_at: string;
 };
 
 type ListItemsParams = {
@@ -138,8 +155,30 @@ type ListItemsParams = {
 
 type ListItemsResponse = {
   items: ListItem[];
+  deletedItems?: DeletedItem[];
   hasMore: boolean;
   nextCursor: string | null;
+};
+
+export type ItemUpdateInput = Partial<{
+  title: string;
+  summary: string | null;
+  tags: string[];
+  capture_note: string | null;
+  collection_id: string | null;
+  reminder_at: string | null;
+  canvas_x: number;
+  canvas_y: number;
+  canvas_pinned: boolean;
+}>;
+
+export type Collection = {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string | null;
+  icon: string | null;
+  created_at: string;
 };
 
 export function createRecallClient(opts: ClientOptions) {
@@ -205,6 +244,19 @@ export function createRecallClient(opts: ClientOptions) {
       },
       get: (id: string) =>
         request<{ item: ListItem | null }>(`/items/${encodeURIComponent(id)}`),
+      update: (id: string, input: ItemUpdateInput) =>
+        request<{ success: true }>(`/items/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify(input),
+        }),
+      archive: (id: string) =>
+        request<{ success: true; archive_status: "pending"; job_id: string }>(
+          `/items/${encodeURIComponent(id)}/archive`,
+          {
+            method: "POST",
+            body: JSON.stringify({}),
+          },
+        ),
       delete: (id: string) =>
         request<{ success: true }>(`/items/${encodeURIComponent(id)}`, {
           method: "DELETE",
@@ -250,6 +302,9 @@ export function createRecallClient(opts: ClientOptions) {
     },
     me: {
       get: () => request<MeResponse>("/me"),
+    },
+    collections: {
+      list: () => request<{ collections: Collection[] }>("/collections"),
     },
     raw: { request },
   };

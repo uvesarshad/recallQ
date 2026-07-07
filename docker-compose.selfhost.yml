@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: recall
+      POSTGRES_USER: recall
+      POSTGRES_PASSWORD: recall_dev_password
+    volumes:
+      - recall-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recall -d recall"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      SELF_HOSTED: "true"
+      DATABASE_URL: postgres://recall:recall_dev_password@postgres:5432/recall
+      AUTH_SECRET: change-me-to-at-least-32-random-characters
+      APP_URL: http://localhost:3008
+      FILES_BASE_PATH: /data/files
+    volumes:
+      - recall-files:/data/files
+    ports:
+      - "3008:3008"
+    command: sh -lc "pnpm db:migrate && pnpm --filter @recall/web start"
+
+  worker-enrich:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      SELF_HOSTED: "true"
+      DATABASE_URL: postgres://recall:recall_dev_password@postgres:5432/recall
+      AUTH_SECRET: change-me-to-at-least-32-random-characters
+      FILES_BASE_PATH: /data/files
+    volumes:
+      - recall-files:/data/files
+    command: pnpm worker:enrich
+
+  worker-reminders:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      SELF_HOSTED: "true"
+      DATABASE_URL: postgres://recall:recall_dev_password@postgres:5432/recall
+      AUTH_SECRET: change-me-to-at-least-32-random-characters
+      FILES_BASE_PATH: /data/files
+    volumes:
+      - recall-files:/data/files
+    command: pnpm worker:reminders
+
+  worker-jobs:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      SELF_HOSTED: "true"
+      DATABASE_URL: postgres://recall:recall_dev_password@postgres:5432/recall
+      AUTH_SECRET: change-me-to-at-least-32-random-characters
+      FILES_BASE_PATH: /data/files
+    volumes:
+      - recall-files:/data/files
+    command: pnpm --filter @recall/web worker:jobs
+
+volumes:
+  recall-postgres:
+  recall-files:

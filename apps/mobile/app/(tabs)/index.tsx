@@ -26,8 +26,10 @@ type LocalPendingRow = {
   tags: null;
   source: "mobile";
   created_at: string;
+  updated_at: string;
   raw_url: string | null;
   raw_text: string | null;
+  capture_note: string | null;
   collection_id: null;
   collection_name: null;
   enriched: false;
@@ -37,6 +39,14 @@ type LocalPendingRow = {
   blur_data_url: null;
   file_name: null;
   file_mime_type: null;
+  archive_requested_at: null;
+  archive_status: "not_requested";
+  archive_last_error: null;
+  archive_last_attempt_at: null;
+  link_last_checked_at: null;
+  link_http_status: null;
+  link_broken: false;
+  link_failure_reason: null;
 };
 
 function fromPending(row: PendingCapture): FeedRow {
@@ -49,8 +59,10 @@ function fromPending(row: PendingCapture): FeedRow {
     tags: null,
     source: "mobile",
     created_at: row.created_at,
+    updated_at: row.created_at,
     raw_url: row.raw_url,
     raw_text: row.raw_text,
+    capture_note: row.capture_note,
     collection_id: null,
     collection_name: null,
     enriched: false,
@@ -60,6 +72,14 @@ function fromPending(row: PendingCapture): FeedRow {
     blur_data_url: null,
     file_name: null,
     file_mime_type: null,
+    archive_requested_at: null,
+    archive_status: "not_requested",
+    archive_last_error: null,
+    archive_last_attempt_at: null,
+    link_last_checked_at: null,
+    link_http_status: null,
+    link_broken: false,
+    link_failure_reason: null,
   };
 }
 

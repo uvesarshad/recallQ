@@ -1,0 +1,41 @@
+image:
+  repository: ghcr.io/montr-ai/recallq
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  port: 3008
+
+ingress:
+  enabled: false
+  className: ""
+  host: recallq.example.com
+  tlsSecretName: ""
+
+env:
+  NODE_ENV: production
+  SELF_HOSTED: "true"
+  FILES_BASE_PATH: /data/files
+
+secretEnv:
+  DATABASE_URL: ""
+  AUTH_SECRET: ""
+  GEMINI_API_KEY: ""
+
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClassName: ""
+
+workers:
+  enrichment:
+    enabled: true
+    command: ["pnpm", "worker:enrich"]
+  reminders:
+    enabled: true
+    command: ["pnpm", "worker:reminders"]
+  jobs:
+    enabled: true
+    command: ["pnpm", "worker:jobs"]

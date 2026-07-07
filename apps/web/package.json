@@ -11,6 +11,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "worker:enrich": "tsx --env-file=../../.env workers/enrichment-worker.ts",
     "worker:reminders": "tsx --env-file=../../.env workers/reminder-worker.ts",
+    "worker:jobs": "tsx --env-file=../../.env workers/job-worker.ts",
     "analyze": "cross-env ANALYZE=true next build"
   },
   "dependencies": {

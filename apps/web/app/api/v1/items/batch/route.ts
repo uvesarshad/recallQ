@@ -1,6 +1,10 @@
 import { apiError, apiOk } from "@/lib/api";
+import { deleteArchiveAssetsForItems } from "@/lib/archive-assets";
 import { db } from "@/lib/db";
+import { recordItemTombstones } from "@/lib/item-tombstones";
 import { requireSessionUser } from "@/lib/request-auth";
+import { deleteFile } from "@/lib/storage";
+import { enqueueWebhookEvent } from "@/lib/webhooks";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +42,8 @@ export async function POST(req: Request) {
   } = parsed.data;
 
   const uniqueIds = Array.from(new Set(ids));
-  const ownedItems = await db.query<{ id: string }>(
-    "SELECT id FROM items WHERE user_id = $1 AND id = ANY($2::uuid[])",
+  const ownedItems = await db.query<{ id: string; file_path: string | null }>(
+    "SELECT id, file_path FROM items WHERE user_id = $1 AND id = ANY($2::uuid[])",
     [user.id, uniqueIds],
   );
 
@@ -48,7 +52,22 @@ export async function POST(req: Request) {
   }
 
   if (action.kind === "delete") {
+    await recordItemTombstones(user.id, uniqueIds);
+    await deleteArchiveAssetsForItems(user.id, uniqueIds);
     await db.query("DELETE FROM items WHERE user_id = $1 AND id = ANY($2::uuid[])", [user.id, uniqueIds]);
+    for (const item of ownedItems.rows) {
+      if (item.file_path) {
+        await deleteFile(user.id, item.file_path);
+      }
+    }
+    await Promise.all(uniqueIds.map((id) => enqueueWebhookEvent({
+      userId: user.id,
+      event: "item.deleted",
+      itemId: null,
+      data: { id },
+    }).catch((error) => {
+      console.warn("Failed to enqueue item.deleted webhook", error);
+    })));
     return apiOk({ success: true, count: uniqueIds.length, action: "delete" });
   }
 
@@ -101,6 +120,15 @@ export async function POST(req: Request) {
       );
     }
   }
+
+  await Promise.all(uniqueIds.map((id) => enqueueWebhookEvent({
+    userId: user.id,
+    event: "item.updated",
+    itemId: id,
+    data: { id, fields: Object.keys(action).filter((field) => field !== "kind") },
+  }).catch((error) => {
+    console.warn("Failed to enqueue item.updated webhook", error);
+  })));
 
   return apiOk({ success: true, count: uniqueIds.length, action: "update" });
 }

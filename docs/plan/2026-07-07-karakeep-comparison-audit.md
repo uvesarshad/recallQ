@@ -140,10 +140,10 @@ The biggest recommended direction is not to copy all of Karakeep. First close th
 
 ## Documentation gaps found during the audit
 
-- Several docs still reference old paths such as `app/api/ingest/route.ts`, `workers/enrichment-worker.ts`, and `docs/modules/search-chat-graph.md`; current code lives under `apps/web/...` and `docs/modules/search-chat-canvas.md`.
-- `docs/ui/component-library.md` still describes the old force-graph/ReactFlow graph implementation even though `react-force-graph-2d` was removed and Canvas is now the only visualization.
-- `docs/infra/deployment.md` still describes root-level Next execution and migrations only up to early migration numbers, while the repo is now Turborepo with app-scoped scripts and 17 migrations.
-- `docs/api/route-handlers.md` mixes `/api/v1/...` paths with stale `api/...` shorthand and has some route names that do not match the current code layout exactly.
+- P3.1 cleanup has been applied: current docs point implementation paths at `apps/web/app/api/v1/*`, `apps/web/workers/*`, and `docs/modules/search-chat-canvas.md`.
+- P3.2 cleanup has been applied: `docs/ui/component-library.md` now describes the current Feed, Canvas, modal, settings, mobile, and extension surfaces.
+- Remaining P3 documentation work is the planned deployment deep refresh: systemd examples, Docker compose path, current migration range, storage volumes, and production worker supervision.
+- As of the P3.1/P3.2 cleanup, `docs/api/route-handlers.md` uses versioned route paths and current endpoint names.
 
 ## Recommended roadmap
 

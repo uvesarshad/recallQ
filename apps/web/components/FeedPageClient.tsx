@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  BookmarkPlus,
   Hash,
   Search,
   Trash2,
@@ -24,9 +25,16 @@ import type { ArchiveItem, CollectionRecord } from "@/lib/types";
 type FeedSort = "newest" | "oldest" | "title";
 type FeedType = "all" | "url" | "text" | "note" | "file";
 type FeedSource = "all" | "telegram" | "pwa-share" | "email" | "web" | "manual" | "extension" | "mobile";
+type StateFilter = "all" | "favorites" | "read-later" | "archived" | "reading" | "read" | "unread" | "broken";
 type ItemType = Exclude<FeedType, "all">;
 type FeedItem = ArchiveItem & { type: ItemType };
 type Folder = CollectionRecord;
+type SavedSearch = {
+  id: string;
+  name: string;
+  query: string;
+  mode: "hybrid" | "fulltext" | "semantic";
+};
 
 const typeOptions: Array<{ label: string; value: FeedType }> = [
   { label: "All types", value: "all" },
@@ -48,6 +56,17 @@ const sourceOptions: Array<{ label: string; value: FeedSource }> = [
 ];
 
 const VISIBLE_TAG_COUNT = 8;
+
+const stateOptions: Array<{ label: string; value: StateFilter }> = [
+  { label: "All states", value: "all" },
+  { label: "Favorites", value: "favorites" },
+  { label: "Read later", value: "read-later" },
+  { label: "Archived", value: "archived" },
+  { label: "Reading", value: "reading" },
+  { label: "Read", value: "read" },
+  { label: "Unread", value: "unread" },
+  { label: "Broken links", value: "broken" },
+];
 
 async function pollUntilEnriched(
   itemId: string,
@@ -94,6 +113,9 @@ export default function FeedPageClient({
   const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
   const [loadingMore, setLoadingMore] = useState(false);
   const [surfaceError, setSurfaceError] = useState<string | null>(null);
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [saveSearchName, setSaveSearchName] = useState("");
+  const [savingSearch, setSavingSearch] = useState(false);
 
   // Filter state.
   const [sort, setSort] = useState<FeedSort>("newest");
@@ -101,6 +123,7 @@ export default function FeedPageClient({
   const [sourceFilter, setSourceFilter] = useState<FeedSource>("all");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [tagsExpanded, setTagsExpanded] = useState(false);
 
   // Masonry column count (persisted).
@@ -147,6 +170,16 @@ export default function FeedPageClient({
     setHasMore(initialHasMore);
     setNextCursor(initialNextCursor);
   }, [folders, initialHasMore, initialItems, initialNextCursor]);
+
+  useEffect(() => {
+    void fetch("/api/v1/search/saved")
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as { smartSearches?: SavedSearch[] };
+        setSavedSearches(data.smartSearches ?? []);
+      })
+      .catch(() => undefined);
+  }, []);
 
   // Honour ?source=… deep links into the feed (e.g. from the Telegram bot's
   // "view in app" reply).
@@ -196,7 +229,7 @@ export default function FeedPageClient({
   async function reloadItems() {
     setSurfaceError(null);
     const url = searchQuery
-      ? `/api/search?q=${encodeURIComponent(searchQuery)}`
+      ? `/api/search?q=${encodeURIComponent(searchQuery)}&limit=50`
       : "/api/items?limit=50";
     const response = await fetch(url);
     if (!response.ok) {
@@ -234,7 +267,16 @@ export default function FeedPageClient({
         selectedTags.length === 0 ||
         selectedTags.some((tag) => (item.tags || []).includes(tag));
       const matchesFolder = !selectedFolderId || item.collection_id === selectedFolderId;
-      return matchesType && matchesSource && matchesTags && matchesFolder;
+      const matchesState =
+        stateFilter === "all" ||
+        (stateFilter === "favorites" && item.is_favorite) ||
+        (stateFilter === "read-later" && item.is_read_later) ||
+        (stateFilter === "archived" && item.is_archived) ||
+        (stateFilter === "reading" && item.reading_state === "reading") ||
+        (stateFilter === "read" && item.reading_state === "read") ||
+        (stateFilter === "unread" && (!item.reading_state || item.reading_state === "unread")) ||
+        (stateFilter === "broken" && item.link_broken);
+      return matchesType && matchesSource && matchesTags && matchesFolder && matchesState;
     });
 
     next.sort((a, b) => {
@@ -248,7 +290,7 @@ export default function FeedPageClient({
     });
 
     return next;
-  }, [items, selectedTags, selectedFolderId, sort, sourceFilter, typeFilter]);
+  }, [items, selectedTags, selectedFolderId, sort, sourceFilter, stateFilter, typeFilter]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
@@ -266,6 +308,10 @@ export default function FeedPageClient({
       const folder = folderRecords.find((f) => f.id === selectedFolderId);
       chips.push({ key: "folder", label: `Folder: ${folder?.name ?? "—"}`, clear: () => setSelectedFolderId("") });
     }
+    if (stateFilter !== "all") {
+      const label = stateOptions.find((option) => option.value === stateFilter)?.label ?? stateFilter;
+      chips.push({ key: "state", label: `State: ${label}`, clear: () => setStateFilter("all") });
+    }
     for (const tag of selectedTags) {
       chips.push({
         key: `tag-${tag}`,
@@ -274,7 +320,7 @@ export default function FeedPageClient({
       });
     }
     return chips;
-  }, [folderRecords, selectedFolderId, selectedTags, sourceFilter, typeFilter]);
+  }, [folderRecords, selectedFolderId, selectedTags, sourceFilter, stateFilter, typeFilter]);
 
   function toggleTag(tag: string) {
     setSelectedTags((current) =>
@@ -330,7 +376,11 @@ export default function FeedPageClient({
     setLoadingMore(true);
     setSurfaceError(null);
     try {
-      const response = await fetch(`/api/items?limit=50&cursor=${encodeURIComponent(nextCursor)}`);
+      const response = await fetch(
+        searchQuery
+          ? `/api/search?q=${encodeURIComponent(searchQuery)}&limit=50&cursor=${encodeURIComponent(nextCursor)}`
+          : `/api/items?limit=50&cursor=${encodeURIComponent(nextCursor)}`,
+      );
       if (!response.ok) {
         setSurfaceError("More items could not be loaded right now.");
         return;
@@ -350,6 +400,41 @@ export default function FeedPageClient({
     } finally {
       setLoadingMore(false);
     }
+  }
+
+  async function saveCurrentSearch() {
+    const query = searchQuery.trim();
+    const name = saveSearchName.trim() || query.slice(0, 80);
+    if (!query || savingSearch) return;
+
+    setSavingSearch(true);
+    setSurfaceError(null);
+    try {
+      const response = await fetch("/api/v1/search/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, query, mode: "hybrid" }),
+      });
+      if (!response.ok) {
+        setSurfaceError(response.status === 409 ? "That saved search name already exists." : "The search could not be saved.");
+        return;
+      }
+      const data = (await response.json()) as { smartSearch?: SavedSearch };
+      if (data.smartSearch) {
+        setSavedSearches((current) => [
+          data.smartSearch!,
+          ...current.filter((entry) => entry.id !== data.smartSearch!.id),
+        ]);
+      }
+      setSaveSearchName("");
+    } finally {
+      setSavingSearch(false);
+    }
+  }
+
+  async function deleteSavedSearch(id: string) {
+    setSavedSearches((current) => current.filter((entry) => entry.id !== id));
+    await fetch(`/api/v1/search/saved/${id}`, { method: "DELETE" }).catch(() => undefined);
   }
 
   async function applyBatchAction(kind: "update" | "delete") {
@@ -533,20 +618,42 @@ export default function FeedPageClient({
     <div style={{ maxWidth: 1240, margin: "0 auto", padding: "4px 18px 80px" }}>
       {/* Header */}
       {searchQuery ? (
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold text-text-primary">Search results</h1>
-          <span className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-sm">
-            <Search className="h-3.5 w-3.5 text-brand" />
-            <span className="text-text-primary">&ldquo;{searchQuery}&rdquo;</span>
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-semibold text-text-primary">Search results</h1>
+            <span className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-sm">
+              <Search className="h-3.5 w-3.5 text-brand" />
+              <span className="text-text-primary">&ldquo;{searchQuery}&rdquo;</span>
+              <button
+                type="button"
+                onClick={() => router.push("/app")}
+                className="rounded-full p-0.5 text-brand hover:bg-brand/20"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={saveSearchName}
+              onChange={(event) => setSaveSearchName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void saveCurrentSearch();
+              }}
+              placeholder="Saved search name"
+              className="min-w-0 rounded-input border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-brand"
+            />
             <button
               type="button"
-              onClick={() => router.push("/app")}
-              className="rounded-full p-0.5 text-brand hover:bg-brand/20"
-              aria-label="Clear search"
+              onClick={() => void saveCurrentSearch()}
+              disabled={savingSearch}
+              className="inline-flex items-center gap-2 rounded-buttons border border-brand/40 bg-brand/10 px-3 py-2 text-sm font-medium text-brand transition hover:bg-brand/20 disabled:opacity-50"
             >
-              <X className="h-3.5 w-3.5" />
+              <BookmarkPlus className="h-4 w-4" />
+              {savingSearch ? "Saving" : "Save search"}
             </button>
-          </span>
+          </div>
         </div>
       ) : (
         <div className="mb-6 flex items-baseline justify-between gap-4">
@@ -557,6 +664,41 @@ export default function FeedPageClient({
           </span>
         </div>
       )}
+
+      {savedSearches.length > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] uppercase tracking-[0.18em] text-text-muted">Smart searches</span>
+          {savedSearches.slice(0, 10).map((savedSearch) => {
+            const active = searchQuery === savedSearch.query;
+            return (
+              <span
+                key={savedSearch.id}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${
+                  active
+                    ? "border-brand bg-brand text-white"
+                    : "border-border bg-bg text-text-mid"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => router.push(`/app?q=${encodeURIComponent(savedSearch.query)}`)}
+                  className={active ? "text-white" : "hover:text-text-primary"}
+                >
+                  {savedSearch.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteSavedSearch(savedSearch.id)}
+                  aria-label={`Delete saved search ${savedSearch.name}`}
+                  className={active ? "text-white/80 hover:text-white" : "text-text-muted hover:text-rose-300"}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* ControlBar — replaces the old inline filter row */}
       <ControlBar
@@ -580,6 +722,26 @@ export default function FeedPageClient({
         onAddFolder={() => setShowFolderForm((prev) => !prev)}
         folders={folderRecords}
       />
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        {stateOptions.map((option) => {
+          const active = stateFilter === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setStateFilter(option.value)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                active
+                  ? "border-brand bg-brand text-white"
+                  : "border-border bg-bg text-text-mid hover:border-brand/40 hover:text-text-primary"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Inline new folder form */}
       {showFolderForm ? (
@@ -644,6 +806,7 @@ export default function FeedPageClient({
               setSourceFilter("all");
               setSelectedTags([]);
               setSelectedFolderId("");
+              setStateFilter("all");
             }}
             className="ml-1 rounded-full px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary"
           >
@@ -826,6 +989,7 @@ export default function FeedPageClient({
                   setSourceFilter("all");
                   setSelectedTags([]);
                   setSelectedFolderId("");
+                  setStateFilter("all");
                 }}
               >
                 Clear all filters

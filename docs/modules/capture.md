@@ -22,9 +22,17 @@ The Ingestion and Capture module is Recall's primary write entry point. It captu
 - Validation: Zod validates capture payloads in `apps/web/lib/validation.ts`.
 - Plan and storage limits: `ingestItem` locks the user row, checks finite save/storage/reminder caps, and never passes unlimited plan values into SQL comparisons.
 - File verification: MIME and file-size checks happen before disk writes; file bytes are counted exactly once.
+- Durable archive assets: HTML, screenshot, PDF, extracted-text, original-file, thumbnail, and opt-in video-stub records belong in `archive_assets`, owned by both user and item. Item deletion and retention cleanup remove stored files and update storage accounting.
 - Action synthesis: `inferCaptureActions` parses tags, folder names, and reminders with regex plus Gemini when intent signals are present.
 - Transactional write: folder resolution, item insert, save counter, storage accounting, and reminder insert happen in one DB transaction. Failed DB work rolls back counters, and failed file ingests clean up the written file.
+- Automation rules: `apps/web/lib/automation-rules.ts` evaluates enabled rules for `capture`, `import`, and `rss` events. Rules can skip matching inputs before write and can add tags, move folders, set reminders, enqueue page archival, mark favorites, archive items from the feed, or mark read-later after write.
 - Return: Returns an optimistic success response with `enrich_status: "pending"`.
+
+### Import, Archive, and RSS Capture
+- Imports: `POST /api/v1/imports/browser-bookmarks`, `/pocket`, `/omnivore`, `/linkwarden`, and `/csv` normalize external exports into URL records, support dry-run previews, dedupe exact URLs, record `import_sessions`, and send each new URL through `ingestItem` with automation event `import`.
+- Page archive: URL captures may pass `archive_page`; item detail can call `POST /api/v1/items/[id]/archive` with optional asset kinds. Archive jobs fetch via `safeFetch`, sanitize HTML in `apps/web/lib/archive-html.ts`, optionally use Playwright if installed for screenshot/PDF output, write unsupported visual/video markers when unavailable, and update link-health fields.
+- RSS capture: `rss_feeds` are polled by `apps/web/workers/job-worker.ts`; new feed entries become `source: "rss"` items and run RSS-scoped automation rules.
+- Outbound webhooks: item created, updated, deleted, and enriched events enqueue signed `webhook` jobs for matching user subscriptions. Delivery uses SSRF-safe fetch, retry backoff, and masked/encrypted secrets.
 
 ### Post-Capture Enrichment (`apps/web/workers/enrichment-worker.ts`)
 - URL extraction: User-supplied URLs are fetched through `safeFetch` in `apps/web/lib/url-safety.ts`, then parsed with Cheerio.
@@ -42,6 +50,7 @@ The Ingestion and Capture module is Recall's primary write entry point. It captu
 - When capture payload schemas or ingestion helpers change.
 - When command formats or action extraction behavior changes.
 - When document extraction libraries, remote fetch policy, or enrichment worker behavior changes.
+- When archive, RSS, import, or automation-rule capture behavior changes.
 
 ## Related Docs
 - [docs/overview.md](file:///e:/Projects/recallQ/docs/overview.md) - Connects tech stack.

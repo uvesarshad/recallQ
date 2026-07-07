@@ -16,7 +16,12 @@
     "test": "turbo run test --filter=@recall/web",
     "db:migrate": "node scripts/migrate.js",
     "db:migrate:latest": "node scripts/migrate-latest.js",
+    "admin:jobs": "node scripts/admin-jobs.mjs",
+    "openapi:generate": "node scripts/generate-openapi.mjs",
+    "recall": "node scripts/recall-cli.mjs",
+    "mcp": "node scripts/recall-mcp-server.mjs",
     "worker:enrich": "pnpm --filter @recall/web worker:enrich",
+    "worker:jobs": "pnpm --filter @recall/web worker:jobs",
     "worker:reminders": "pnpm --filter @recall/web worker:reminders",
     "telegram:webhook": "node scripts/register-telegram-webhook.js"
   },

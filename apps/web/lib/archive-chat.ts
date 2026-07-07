@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { embedText, sanitizeForPrompt } from "@/lib/gemini";
+import { embedQueryText, sanitizeForPrompt } from "@/lib/gemini";
 import { streamGenerate, generateText } from "@/lib/llm";
 import { hasVectorSupport } from "@/lib/vector";
 
@@ -32,7 +32,7 @@ async function buildArchiveContext(userId: string, query: string, timezone: stri
     return { systemPrompt: "", citations: [], earlyAnswer: "Semantic archive Q&A is not available right now because vector search is not enabled." };
   }
 
-  const embedding = await embedText(trimmedQuery);
+  const embedding = await embedQueryText(trimmedQuery);
   if (!embedding) {
     return { systemPrompt: "", citations: [], earlyAnswer: "I couldn't read that question. Please try again." };
   }

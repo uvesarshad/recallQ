@@ -1,5 +1,9 @@
 import { db } from "@/lib/db";
-import { getPlanLimits, getMaxReminders, Plan } from "@/lib/plan-limits";
+import { enqueuePageArchive } from "@/lib/archive-assets";
+import { applyAutomationRules, shouldSkipCaptureByRules } from "@/lib/automation-rules";
+import { getPlanLimits, getMaxReminders, type Plan } from "@/lib/plan-limits";
+import { getHostname } from "@/lib/relations";
+import { enqueueWebhookEvent } from "@/lib/webhooks";
 import { ensureCollection, inferCaptureActions } from "./comment-actions";
 import { isAcceptedMimeType, removeStoredFile, saveFile } from "./storage";
 import { randomUUID } from "crypto";
@@ -19,16 +23,35 @@ export interface IngestPayload {
     categoryName?: string | null;
     reminderAt?: string | null;
   };
-  source: "web" | "pwa-share" | "telegram" | "email" | "extension" | "mobile" | "manual";
+  source: "web" | "pwa-share" | "telegram" | "email" | "extension" | "mobile" | "rss" | "manual";
+  automationEvent?: "capture" | "import" | "rss";
   collection_id?: string | null;
+  archive_page?: boolean;
   fileBuffer?: Buffer | null;
   fileName?: string | null;
   fileMimeType?: string | null;
 }
 
 export async function ingestItem(payload: IngestPayload) {
+  if (
+    await shouldSkipCaptureByRules({
+      userId: payload.userId,
+      event: payload.automationEvent ?? "capture",
+      title: payload.title,
+      url: payload.raw_url,
+      text: payload.raw_text,
+      source: payload.source,
+      tags: payload.tags,
+    })
+  ) {
+    return { error: "skipped_by_rule" };
+  }
+
   if (payload.fileBuffer && !isAcceptedMimeType(payload.fileMimeType)) {
     return { error: "unsupported_file_type" };
+  }
+  if (payload.archive_page && (payload.type !== "url" || !payload.raw_url)) {
+    return { error: "archive_requires_url" };
   }
 
   const inferred = await inferCaptureActions({
@@ -40,11 +63,13 @@ export async function ingestItem(payload: IngestPayload) {
     overrides: payload.actionOverrides,
     resolveCollection: false,
   });
+  const finalTags = inferred.tags;
 
   const itemId = randomUUID();
   let filePath: string | null = null;
   let fileSaved = false;
   let committedReminderAt: string | null = null;
+  const urlHost = getHostname(payload.raw_url);
 
   let storageDelta = 0;
   if (payload.fileBuffer) {
@@ -119,10 +144,10 @@ export async function ingestItem(payload: IngestPayload) {
 
     const itemResult = await client.query(
       `INSERT INTO items (
-         id, user_id, collection_id, type, raw_url, raw_text, title, tags, source, capture_note,
+         id, user_id, collection_id, type, raw_url, url_host, raw_text, title, tags, source, capture_note,
          reminder_at, enriched, file_path, file_name, file_mime_type
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING id`,
       [
         itemId,
@@ -130,6 +155,7 @@ export async function ingestItem(payload: IngestPayload) {
         collectionId,
         payload.type,
         payload.raw_url || null,
+        urlHost,
         payload.raw_text || null,
         payload.title || null,
         inferred.tags,
@@ -170,13 +196,50 @@ export async function ingestItem(payload: IngestPayload) {
       }
     }
 
+    let archiveJobId: string | null = null;
+    if (payload.archive_page && payload.raw_url) {
+      archiveJobId = await enqueuePageArchive({
+        db: client,
+        userId: payload.userId,
+        itemId,
+        sourceUrl: payload.raw_url,
+      });
+    }
+
     await client.query("COMMIT");
+
+    await applyAutomationRules({
+      itemId,
+      userId: payload.userId,
+      event: payload.automationEvent ?? "capture",
+      title: payload.title,
+      url: payload.raw_url,
+      text: payload.raw_text,
+      source: payload.source,
+      tags: inferred.tags,
+    });
+
+    await enqueueWebhookEvent({
+      userId: payload.userId,
+      event: "item.created",
+      itemId,
+      data: {
+        id: itemId,
+        type: payload.type,
+        title: payload.title ?? null,
+        source: payload.source,
+      },
+    }).catch((error) => {
+      console.warn("Failed to enqueue item.created webhook", error);
+    });
 
     return {
       success: true,
       id: itemResult.rows[0].id,
       enrich_status: "pending" as const,
       reminder_at: committedReminderAt,
+      archive_status: payload.archive_page ? ("pending" as const) : ("not_requested" as const),
+      archive_job_id: archiveJobId,
     };
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);

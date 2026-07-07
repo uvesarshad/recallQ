@@ -46,6 +46,41 @@ Recall uses a lightweight Node-based web test harness for focused utility covera
 - Target: `apps/web/lib/url-safety.ts`
 - Coverage: blocking local/private/link-local/reserved IPs, localhost names, non-HTTP protocols, embedded credentials, and allowing public HTTP/HTTPS URLs.
 
+### Enrichment Claim Test Suite
+- File: `apps/web/tests/enrichment-claim.test.ts`
+- Target: `apps/web/lib/enrichment-claim.ts`
+- Coverage: duplicate claim prevention, retry increment/backoff, terminal failure, and success transition.
+
+### Ingest Limits Test Suite
+- File: `apps/web/tests/ingest-limits.test.ts`
+- Target: `apps/web/lib/ingest.ts`
+- Coverage: free/starter/pro/self-hosted save, storage, and reminder limit behavior plus non-finite SQL parameter regressions.
+
+### Reader State Test Suite
+- File: `apps/web/tests/reader-state.test.ts`
+- Target: `apps/web/lib/reader-state.ts`
+- Coverage: progress clamping, inferred reading states, highlight color/quote normalization, and reader-text availability checks.
+
+### Archive Assets Test Suite
+- File: `apps/web/tests/archive-assets.test.ts`
+- Target: `apps/web/lib/archive-html.ts`
+- Coverage: HTML sanitization, canonical URL extraction, response archive metadata, broken-link status classification, archive asset kind normalization, and retention due-date helpers.
+
+### Import/Export Test Suite
+- File: `apps/web/tests/import-export.test.ts`
+- Target: `apps/web/lib/import-export.ts`
+- Coverage: Netscape bookmarks parsing/export escaping, JSON export tag aggregation, Pocket CSV import, Omnivore JSON import, Linkwarden JSON import, and generic CSV import normalization.
+
+### RSS Test Suite
+- File: `apps/web/tests/rss.test.ts`
+- Target: `apps/web/lib/rss-parser.ts`
+- Coverage: RSS/Atom item parsing, entry keys, URLs, titles, summaries, and dates.
+
+### Search Parser Test Suite
+- File: `apps/web/tests/search-parser.test.ts`
+- Target: `apps/web/lib/search-query.ts`
+- Coverage: advanced filter parsing, quoted phrases, boolean groups, and search cursor encode/decode.
+
 ## Testing Guidelines
 - AGENT AVOID: Do not introduce Jest, Mocha, or Vitest unless explicitly requested.
 - AGENT NOTE: New focused helpers under `apps/web/lib/` should have a matching `apps/web/tests/*.test.ts` file registered in `run-tests.ts`.
