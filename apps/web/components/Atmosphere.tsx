@@ -21,8 +21,8 @@ export default function Atmosphere() {
           background: "radial-gradient(circle, #3D7DFF55 0%, transparent 70%)",
           top: -160,
           left: -120,
-          filter: "blur(80px)",
-          opacity: 0.5,
+          filter: "blur(40px)",
+          opacity: 0.4,
           animation: "f1 22s ease-in-out infinite",
         }}
       />
@@ -36,8 +36,8 @@ export default function Atmosphere() {
           background: "radial-gradient(circle, #22C9A855 0%, transparent 70%)",
           bottom: -180,
           right: -100,
-          filter: "blur(80px)",
-          opacity: 0.5,
+          filter: "blur(40px)",
+          opacity: 0.4,
           animation: "f2 26s ease-in-out infinite",
         }}
       />
@@ -51,8 +51,8 @@ export default function Atmosphere() {
           background: "radial-gradient(circle, #A8C4FF66 0%, transparent 70%)",
           top: "40%",
           right: "25%",
-          filter: "blur(80px)",
-          opacity: 0.5,
+          filter: "blur(40px)",
+          opacity: 0.4,
           animation: "f3 30s ease-in-out infinite",
         }}
       />

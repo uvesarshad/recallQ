@@ -3,7 +3,7 @@
 > Scope: Documents typography fonts, color system variables, border radiuses, spacing, and styling constraints.
 > Rendering context: Client-side
 > Project tier: 4
-> Last updated: 2026-05-22
+> Last updated: 2026-07-14
 
 ## Overview
 Recall is designed around a clean, app-like, dark-first visual aesthetic. Global styles are defined in app/globals.css, utilizing tailwind design classes and vanilla CSS variables loaded on the document element. Browser theme preference is stored under recall-theme, validated through lib/theme.ts, and applied by the root beforeInteractive Script plus hydrated client controls. This layout promotes readability, avoids heavy shadows, and enforces clean high-density text interfaces.
@@ -55,6 +55,21 @@ All color codes are defined inside app/globals.css as custom CSS variables in th
 - Badges and Chips: border-radius of 100px.
 - Canvas Elements: border-radius of 12px.
 - Spacing Constants: Uses Tailwind's grid scale. Inline gaps use gap-2. Modals and cards implement standard paddings from p-3 (compact) to p-4 (normal) and p-5 (modal interiors).
+
+## Motion Tokens
+Motion values are tokenized so durations, easing, and springs stay consistent instead of being hand-typed per component (added 2026-07-14; see `docs/plan/2026-07-14-uiux-motion-audit.md`).
+- Source of truth: `@recall/tokens` exports `MOTION` (`duration.fast` = `0.16s`, `duration.base` = `0.2s`; `ease.out` = `cubic-bezier(0.23,1,0.32,1)`, `ease.inOut` = `cubic-bezier(0.77,0,0.175,1)`) plus two framer-motion spring presets: `SPRING_UI` (critically damped, no overshoot — the default for menus, panels, cards, hover lifts) and `SPRING_POP` (slight bounce — reserve for momentum/celebratory motion only).
+- CSS mirror: `--duration-fast`, `--duration-base`, `--ease-out`, `--ease-in-out` are defined in `:root` in `app/globals.css` (and `packages/tokens/src/tokens.css`), kept out of `@theme` so they don't collide with Tailwind's own `duration-*`/`ease-*` utilities. Use them in inline/CSS transition strings, e.g. `transition: "background var(--duration-fast) var(--ease-out)"`.
+- Springs cannot be expressed in CSS; framer-motion components import `SPRING_UI`/`SPRING_POP` from `@recall/tokens` for `transition={...}`.
+- Budget: keep interactive UI transitions under ~200ms; never animate `scale(0)` (start ≥ `0.9`); avoid overshoot on anything that merely faded in.
+- AGENT NOTE: Do not reintroduce hand-typed durations, easing curves, or inline `@keyframes` that duplicate a token — extend `@recall/tokens` instead.
+
+## Reduced Motion
+- `app/globals.css` has a `@media (prefers-reduced-motion: reduce)` rule that stops looping/decorative keyframe animation (Atmosphere blobs, `blob-spin`, `float`, `pulse-ring`, `shimmer`), makes keyframe entrances instant, and forces `scroll-behavior: auto` — but it deliberately leaves `transition-duration` intact so opacity/color fades (theme-change fade, hover tints, action reveals) still aid comprehension.
+- CSS cannot reach framer-motion/JS springs, so motion components (`ItemCard`, `ChatDock`, `FloatingMenu`, `CaptureBar`) call `useReducedMotion()` and collapse transform/scale springs to opacity-only under the flag.
+- `@media (prefers-reduced-transparency: reduce)` raises the glass token alphas (`--tk-glass`/`--color-glass`) toward opaque and drops blur on class-based glass; `@media (prefers-contrast: more)` gives borders/surfaces a near-solid, higher-contrast fallback. KNOWN LIMIT: many surfaces set `backdrop-filter`/translucent `background` via INLINE component styles, which a stylesheet cannot override — the token-alpha bump helps inline `background: var(--tk-glass)` consumers, but per-component inline `backdrop-filter` removal (e.g. the shell header) is a component-level follow-up.
+- Landing-page movement hovers (`hover:-translate`/`group-hover:scale`) carry a `no-touch-lift` class neutralized under `@media (not (hover: hover)), (pointer: coarse)` so the lift doesn't stick after a tap on touch devices.
+- AGENT NOTE: Any new framer-motion movement (transform/scale/position springs) must branch on `useReducedMotion()`; the CSS blanket will not cover it.
 
 ## Focus and Accessibility
 - All interactive elements receive a sitewide `:focus-visible` outline (Stage 7 of [PLAN.md](file:///e:/Projects/recallQ/PLAN.md)) defined in `apps/web/app/globals.css`. The outline uses `var(--color-brand)` so it adapts to dark and light themes automatically. `:focus` (without `:visible`) is suppressed so mouse clicks don't show the ring; Tab navigation and keyboard interaction always do.

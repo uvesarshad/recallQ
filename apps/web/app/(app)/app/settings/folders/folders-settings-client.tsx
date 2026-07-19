@@ -413,7 +413,7 @@ function ColorSwatches({ value, onChange }: { value: string; onChange: (color: s
               opacity: active ? 1 : 0.6,
               outline: active ? `2px solid ${color}` : "none",
               outlineOffset: 2,
-              transition: "all 0.15s",
+              transition: "opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), outline var(--duration-fast) var(--ease-out)",
               boxShadow: active ? `0 0 0 2px white, 0 0 0 4px ${color}` : "none",
               padding: 0,
             }}

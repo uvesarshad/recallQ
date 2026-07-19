@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { SPRING_UI } from "@recall/tokens";
 import { Archive, FileUp, ListPlus, Sparkles, X } from "lucide-react";
 import ActionPreview, { type ActionOverrideValue, type ActionPreviewValue } from "@/components/ActionPreview";
 import { dispatchArchiveItemCreated, dispatchArchiveItemsChanged } from "@/lib/archive-events";
@@ -188,26 +190,36 @@ export default function CreateItemDialog() {
   }
 
   const containerRef = useModalA11y(open);
+  const reduce = useReducedMotion();
   const singleUrlMatch = mode === "single" ? content.trim().match(/https?:\/\/[^\s]+/) : null;
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          setOpen(false);
-        }
-      }}
-    >
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-dialog-title"
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-modals border border-border bg-surface shadow-2xl"
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setOpen(false);
+            }
+          }}
+        >
+          <motion.div
+            ref={containerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-dialog-title"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+            animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+            transition={SPRING_UI}
+            style={{ transformOrigin: "center" }}
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-modals border border-border bg-surface shadow-2xl"
+          >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 id="create-dialog-title" className="text-lg font-semibold text-text-primary">Create Item</h2>
@@ -363,7 +375,9 @@ export default function CreateItemDialog() {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

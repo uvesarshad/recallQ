@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Bell,
   CheckSquare2,
@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation";
 import { resolvePreviewImageUrl } from "@/lib/item-preview";
 import type { ArchiveItem } from "@/lib/types";
 import { TagBadge } from "@recall/ui";
-import { T, FONT, MONO } from "@recall/tokens";
+import { T, FONT, MONO, SPRING_UI } from "@recall/tokens";
 
 const sourceLabel: Record<string, string> = {
   telegram: "Telegram",
@@ -85,6 +85,8 @@ function GlassActionBtn({
   children: React.ReactNode;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const reduce = useReducedMotion();
   return (
     <button
       type="button"
@@ -93,6 +95,9 @@ function GlassActionBtn({
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -109,7 +114,9 @@ function GlassActionBtn({
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
         cursor: "pointer",
-        transition: "background 0.15s",
+        transform: !reduce && pressed ? "scale(0.97)" : "scale(1)",
+        transition:
+          "background var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out)",
         flexShrink: 0,
       }}
     >
@@ -148,6 +155,7 @@ export default function ItemCard({
   const [loading, setLoading] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const router = useRouter();
+  const reduce = useReducedMotion();
 
   const hostLabel = getHostLabel(item.raw_url);
   const previewImageUrl = resolvePreviewImageUrl(item.image_url, item.raw_url);
@@ -392,8 +400,9 @@ export default function ItemCard({
   return (
     <motion.article
       data-feed-index={index}
-      whileHover={{ y: -3 }}
-      transition={{ type: "spring", stiffness: 280, damping: 28 }}
+      whileHover={reduce ? undefined : { y: -3 }}
+      whileTap={reduce ? undefined : { scale: 0.985 }}
+      transition={SPRING_UI}
       onMouseEnter={() => {
         setHovered(true);
         setShowActions(true);
@@ -474,7 +483,7 @@ export default function ItemCard({
             alt={item.title || "Preview"}
             fill
             sizes="(min-width: 768px) 720px, 100vw"
-            style={{ objectFit: "cover", transition: "transform 0.5s ease" }}
+            style={{ objectFit: "cover", transition: "transform var(--duration-base) var(--ease-out)" }}
             unoptimized
             {...(item.blur_data_url
               ? { placeholder: "blur" as const, blurDataURL: item.blur_data_url }
@@ -498,7 +507,7 @@ export default function ItemCard({
                 alignItems: "center",
                 gap: 4,
                 opacity: isMobile ? 1 : showActions ? 1 : 0,
-                transition: "opacity 0.18s",
+                transition: "opacity var(--duration-fast) var(--ease-out)",
                 pointerEvents: isMobile || showActions ? "auto" : "none",
               }}
             >
@@ -588,7 +597,7 @@ export default function ItemCard({
                 alignItems: "center",
                 gap: 4,
                 opacity: isMobile ? 1 : showActions ? 1 : 0,
-                transition: "opacity 0.18s",
+                transition: "opacity var(--duration-fast) var(--ease-out)",
                 pointerEvents: isMobile || showActions ? "auto" : "none",
                 flexShrink: 0,
               }}
@@ -761,7 +770,6 @@ export default function ItemCard({
                   height: 6,
                   borderRadius: "50%",
                   background: T.azure,
-                  animation: "pulse 1.5s ease-in-out infinite",
                   display: "inline-block",
                 }}
               />

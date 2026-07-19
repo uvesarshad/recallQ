@@ -81,6 +81,13 @@ export default function AppShell({
         overflowX: "hidden",
       }}
     >
+      {/* Atmosphere composites app-wide — it renders behind the entire
+          authenticated app, including the scrolling feed, so its blurred blobs
+          stay in the compositor's paint path during scroll. Left mounted here
+          on purpose (removing it is a visual/product change). Future perf work
+          can gate it (e.g. pause/hide while the feed scrolls). Blur was already
+          reduced 80px→40px in Atmosphere.tsx (P0.3). Per-card backdrop-filter
+          scroll reduction is deferred — it needs profiling + scroll detection. */}
       <Atmosphere />
       <FloatingMenu />
 

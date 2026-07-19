@@ -358,7 +358,7 @@ export default function BillingSettingsClient() {
                   cursor: "pointer",
                   background: preferredProvider === "stripe" ? "linear-gradient(120deg," + T.azure + "," + T.mint + ")" : "transparent",
                   color: preferredProvider === "stripe" ? "#fff" : T.inkSoft,
-                  transition: "all 0.2s",
+                  transition: "background var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out)",
                 }}
               >
                 Pay with Stripe
@@ -377,7 +377,7 @@ export default function BillingSettingsClient() {
                   cursor: "pointer",
                   background: preferredProvider === "razorpay" ? "linear-gradient(120deg," + T.azure + "," + T.mint + ")" : "transparent",
                   color: preferredProvider === "razorpay" ? "#fff" : T.inkSoft,
-                  transition: "all 0.2s",
+                  transition: "background var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out)",
                 }}
               >
                 Pay with Razorpay
@@ -449,7 +449,7 @@ export default function BillingSettingsClient() {
                       fontSize: 13,
                       fontWeight: 700,
                       cursor: disabled ? "not-allowed" : "pointer",
-                      transition: "all 0.2s",
+                      transition: "background var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out)",
                     }}
                   >
                     {ctaLabel}

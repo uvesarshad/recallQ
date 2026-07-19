@@ -42,7 +42,12 @@ AGENT NOTE: `GET /api/v1/me`, `GET /api/v1/items`, `PATCH /api/v1/items/[id]`, a
 - Bulk tab sends save locally and close tabs via batched `chrome.tabs.remove(ids[])`.
 - The React app bundle loads only when the pinned app page is opened.
 
-AGENT AVOID: Do not add content scripts or broad `host_permissions` to read tab metadata.
+## Motion
+- Plain CSS only — no framer-motion (keeps the bundle small and the background React-free). Local `--duration-fast`/`--duration-base`/`--ease-out` vars are defined in `entrypoints/app/app.css` and `entrypoints/popup/popup.css`.
+- `button:active { transform: scale(0.97) }` press feedback; `.item-row` `row-in` entrance (fires once per new row because the feed list keys by stable `localId`); `.badge` cross-fades on the Pending→Synced flip; the popup and app `.status` save-confirmation rises/fades in.
+- Both stylesheets carry a `@media (prefers-reduced-motion: reduce)` block that neutralizes transforms/animation while keeping opacity/color end-states.
+
+AGENT AVOID: Do not add content scripts or broad `host_permissions` to read tab metadata. Do not add framer-motion or other animation libraries to the extension — use CSS.
 
 ## Context Menu
 The parent "RecallQ" menu supports:

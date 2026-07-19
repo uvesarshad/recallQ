@@ -11,6 +11,17 @@ interface PillProps {
 
 export function Pill({ icon: Ic, label, onClick, accent, active }: PillProps) {
   const [hovered, setHovered] = React.useState(false);
+  const [pressed, setPressed] = React.useState(false);
+  const [reduce, setReduce] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduce(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const isHighlighted = accent || active;
 
@@ -19,6 +30,12 @@ export function Pill({ icon: Ic, label, onClick, accent, active }: PillProps) {
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => {
+        setHovered(false);
+        setPressed(false);
+      }}
       style={{
         display: "flex",
         alignItems: "center",
@@ -40,7 +57,9 @@ export function Pill({ icon: Ic, label, onClick, accent, active }: PillProps) {
           : "rgba(255,255,255,0.6)",
         border: `1px solid ${isHighlighted ? "transparent" : T.glassEdge}`,
         boxShadow: isHighlighted ? "0 4px 12px rgba(61,125,255,0.28)" : "none",
-        transition: "background 0.2s",
+        transform: !reduce && pressed ? "scale(0.97)" : "scale(1)",
+        transition:
+          "background 0.2s, transform var(--duration-fast) var(--ease-out)",
       }}
     >
       {Ic && <Ic size={15} color={isHighlighted ? "#fff" : T.inkSoft} />}

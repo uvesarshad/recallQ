@@ -29,7 +29,16 @@ interface DragRef {
 export default function CanvasClient() {
   const [items, setItems] = useState<ArchiveItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // Pan offset. `pos` state holds the committed value (initial render + sync on
+  // release); `posRef` is the live value during a drag. Panning writes the
+  // transform straight to the DOM via refs so we do NOT re-render the whole card
+  // layer every mousemove — the old `setPos`-per-frame path forced a full React
+  // render plus layout (`left`/`top`) + paint (`background-position`) each frame.
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const posRef = useRef({ x: 0, y: 0 });
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const [selectedItemId, setSelectedItemId] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const dragRef = useRef<DragRef | null>(null);
@@ -60,18 +69,16 @@ export default function CanvasClient() {
     [items]
   );
 
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      isDragging.current = false;
-      dragRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        originX: pos.x,
-        originY: pos.y,
-      };
-    },
-    [pos]
-  );
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = false;
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: posRef.current.x,
+      originY: posRef.current.y,
+    };
+    setIsPanning(true);
+  }, []);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (!dragRef.current) return;
@@ -80,24 +87,36 @@ export default function CanvasClient() {
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
       isDragging.current = true;
     }
-    setPos({
-      x: dragRef.current.originX + dx,
-      y: dragRef.current.originY + dy,
-    });
+    const x = dragRef.current.originX + dx;
+    const y = dragRef.current.originY + dy;
+    posRef.current = { x, y };
+    // Direct DOM writes — no React re-render during the drag. The card layer
+    // moves on the compositor via translate3d; only the grid background repaints.
+    if (innerRef.current) {
+      innerRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    }
+    if (viewportRef.current) {
+      viewportRef.current.style.backgroundPosition = `${x}px ${y}px`;
+    }
   }, []);
 
-  const onMouseUp = useCallback(() => {
+  const endPan = useCallback(() => {
+    if (!dragRef.current) return;
     dragRef.current = null;
+    setIsPanning(false);
+    // Sync React state to the final offset so re-renders (e.g. items reloading)
+    // keep the same position without a jump.
+    setPos(posRef.current);
   }, []);
 
-  const onMouseLeave = useCallback(() => {
-    dragRef.current = null;
-  }, []);
+  const onMouseUp = endPan;
+  const onMouseLeave = endPan;
 
   return (
     <>
       {/* Canvas viewport */}
       <div
+        ref={viewportRef}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
@@ -107,7 +126,7 @@ export default function CanvasClient() {
           inset: 0,
           top: 81,
           overflow: "hidden",
-          cursor: dragRef.current ? "grabbing" : "grab",
+          cursor: isPanning ? "grabbing" : "grab",
           background: T.wash,
           backgroundImage: `radial-gradient(${T.line} 1.2px, transparent 1.2px)`,
           backgroundSize: "26px 26px",
@@ -116,12 +135,15 @@ export default function CanvasClient() {
           userSelect: "none",
         }}
       >
-        {/* Inner positioning layer */}
+        {/* Inner positioning layer — moved on the compositor via transform. */}
         <div
+          ref={innerRef}
           style={{
             position: "absolute",
-            left: pos.x,
-            top: pos.y,
+            left: 0,
+            top: 0,
+            transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
+            willChange: "transform",
           }}
         >
           {loading && (

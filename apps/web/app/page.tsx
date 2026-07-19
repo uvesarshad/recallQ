@@ -123,7 +123,7 @@ function HeroSection() {
       <div className="mb-20 flex w-full flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300 sm:w-auto sm:flex-row">
         <Link
           href="/app"
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-[#6366f1] px-10 py-3.5 text-[15px] font-bold text-white shadow-[0_0_40px_-6px_rgba(99,102,241,0.55)] transition-all hover:-translate-y-0.5 hover:bg-[#818cf8] hover:shadow-[0_0_52px_-6px_rgba(99,102,241,0.65)] active:scale-95 sm:w-auto"
+          className="no-touch-lift flex w-full items-center justify-center gap-2 rounded-full bg-[#6366f1] px-10 py-3.5 text-[15px] font-bold text-white shadow-[0_0_40px_-6px_rgba(99,102,241,0.55)] transition-all hover:-translate-y-0.5 hover:bg-[#818cf8] hover:shadow-[0_0_52px_-6px_rgba(99,102,241,0.65)] active:scale-95 sm:w-auto"
         >
           Start for free
           <ArrowRight className="h-4 w-4" />
@@ -342,9 +342,9 @@ function CaptureSection() {
         {surfaces.map((s) => (
           <div
             key={s.title}
-            className={`landing-card group relative rounded-[20px] border ${s.border} bg-[var(--landing-surface-subtle)] p-7 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control)]`}
+            className={`landing-card no-touch-lift group relative rounded-[20px] border ${s.border} bg-[var(--landing-surface-subtle)] p-7 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control)]`}
           >
-            <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl ${s.bg} ${s.color} transition-transform duration-300 group-hover:scale-110`}>
+            <div className={`no-touch-lift mb-5 flex h-12 w-12 items-center justify-center rounded-2xl ${s.bg} ${s.color} transition-transform duration-300 group-hover:scale-110`}>
               {s.icon}
             </div>
             <h3 className="mb-2 text-base font-bold text-[var(--landing-text-primary)]">{s.title}</h3>
@@ -373,7 +373,7 @@ function FeaturesSection() {
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-12">
         {/* AI Organization — large */}
-        <div className="landing-card group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-7 sm:p-10">
+        <div className="landing-card no-touch-lift group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-7 sm:p-10">
           <div className="relative z-10 max-w-sm">
             <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6366f1]/20 text-[#818cf8]">
               <Brain className="h-5 w-5" />
@@ -415,7 +415,7 @@ function FeaturesSection() {
         </div>
 
         {/* Semantic Search */}
-        <div className="landing-card group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-5">
+        <div className="landing-card no-touch-lift group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-5">
           <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#38bdf8]/20 text-[#38bdf8]">
             <Search className="h-5 w-5" />
           </div>
@@ -445,7 +445,7 @@ function FeaturesSection() {
         </div>
 
         {/* Chat */}
-        <div className="landing-card group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-5">
+        <div className="landing-card no-touch-lift group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-5">
           <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e879f9]/20 text-[#e879f9]">
             <MessageSquare className="h-5 w-5" />
           </div>
@@ -476,7 +476,7 @@ function FeaturesSection() {
         </div>
 
         {/* Knowledge Graph */}
-        <div className="landing-card group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-7 sm:p-10">
+        <div className="landing-card no-touch-lift group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-7 sm:p-10">
           <div className="flex flex-col gap-8 md:flex-row">
             <div className="flex-1">
               <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#84cc16]/20 text-[#84cc16]">
@@ -532,7 +532,7 @@ function FeaturesSection() {
         </div>
 
         {/* Reminders */}
-        <div className="landing-card group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-4">
+        <div className="landing-card no-touch-lift group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-4">
           <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#facc15]/20 text-[#facc15]">
             <Bell className="h-5 w-5" />
           </div>
@@ -550,7 +550,7 @@ function FeaturesSection() {
         </div>
 
         {/* Freemium */}
-        <div className="landing-card group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-8">
+        <div className="landing-card no-touch-lift group relative overflow-hidden rounded-[24px] border border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] p-8 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)] md:col-span-8">
           <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fb923c]/20 text-[#fb923c]">
             <Link2 className="h-5 w-5" />
           </div>
@@ -649,7 +649,7 @@ function PricingSection() {
             className={`landing-card relative flex flex-col rounded-[24px] border p-8 transition-all ${
               plan.highlighted
                 ? "border-[#6366f1]/50 bg-[#6366f1]/[0.06] shadow-[0_0_60px_-20px_rgba(99,102,241,0.3)]"
-                : "border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] backdrop-blur hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)]"
+                : "no-touch-lift border-[color:var(--landing-border)] bg-[var(--landing-surface-soft)] backdrop-blur hover:-translate-y-0.5 hover:bg-[var(--landing-control-hover)]"
             }`}
           >
             {"badge" in plan && plan.badge ? (
@@ -719,7 +719,7 @@ function CtaSection() {
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               href="/app"
-              className="flex items-center gap-2 rounded-full bg-[#6366f1] px-10 py-3.5 text-[15px] font-bold text-white shadow-[0_0_40px_-6px_rgba(99,102,241,0.55)] transition-all hover:-translate-y-0.5 hover:bg-[#818cf8] hover:shadow-[0_0_52px_-6px_rgba(99,102,241,0.65)] active:scale-95"
+              className="no-touch-lift flex items-center gap-2 rounded-full bg-[#6366f1] px-10 py-3.5 text-[15px] font-bold text-white shadow-[0_0_40px_-6px_rgba(99,102,241,0.55)] transition-all hover:-translate-y-0.5 hover:bg-[#818cf8] hover:shadow-[0_0_52px_-6px_rgba(99,102,241,0.65)] active:scale-95"
             >
               Get started — it&apos;s free
               <ArrowRight className="h-4 w-4" />

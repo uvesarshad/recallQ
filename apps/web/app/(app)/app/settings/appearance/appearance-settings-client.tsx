@@ -90,7 +90,7 @@ export default function AppearanceSettingsPage() {
                     : "rgba(255,255,255,0.5)",
                   textAlign: "left",
                   cursor: "pointer",
-                  transition: "all 0.2s",
+                  transition: "background-color var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out)",
                   boxShadow: active ? "0 0 0 2px rgba(61,125,255,0.15)" : "none",
                   outline: "none",
                 }}

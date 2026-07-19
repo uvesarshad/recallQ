@@ -14,6 +14,9 @@
   --brand-hover: #818cf8;
   --rose: #fb7185;
   --success: #4ade80;
+  --duration-fast: 0.16s;
+  --duration-base: 0.2s;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 * {
@@ -86,8 +89,12 @@ html, body, #root {
   padding: 8px 14px;
   border: none;
   cursor: pointer;
-  transition: background 120ms ease, opacity 120ms ease;
+  transition: transform var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
+.popup button:active { transform: scale(0.97); }
 
 .popup button.primary {
   background: var(--brand);
@@ -122,6 +129,11 @@ html, body, #root {
   padding: 8px 10px;
   border-radius: 8px;
   text-align: center;
+  animation: status-in 180ms var(--ease-out);
+}
+@keyframes status-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .popup .status.success { background: rgba(74, 222, 128, 0.1); color: var(--success); }
 .popup .status.error { background: rgba(251, 113, 133, 0.1); color: var(--rose); }
@@ -149,4 +161,15 @@ html, body, #root {
 button:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+}
+
+/* Respect reduced-motion: keep opacity/color changes, drop movement. */
+@media (prefers-reduced-motion: reduce) {
+  .popup button:active { transform: none; }
+  .popup .status { animation: none; }
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

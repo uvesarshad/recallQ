@@ -36,3 +36,15 @@ html[data-theme="dark"] {
   --shadow: 0 8px 30px rgba(0,0,0,0.3);
   --shadow-lift: 0 18px 50px rgba(0,0,0,0.48);
 }
+
+/* ============================================================
+   Motion tokens — durations & easing (theme-independent).
+   Springs live in the JS token module (SPRING_UI / SPRING_POP);
+   CSS cannot express a spring.
+   ============================================================ */
+:root {
+  --duration-fast: 0.16s;
+  --duration-base: 0.2s;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}

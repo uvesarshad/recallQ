@@ -46,7 +46,7 @@ export default function SettingsNav({ showBilling = true }: { showBilling?: bool
               fontSize: 13.5,
               fontWeight: active ? 700 : 500,
               textDecoration: "none",
-              transition: "all 0.2s",
+              transition: "background var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out)",
               background: active
                 ? "linear-gradient(120deg, " + T.azure + ", " + T.mint + ")"
                 : "transparent",

@@ -174,6 +174,17 @@ html[data-theme="light"] {
   --landing-card-shadow: 0 18px 50px -34px rgba(37, 99, 235, 0.40), 0 8px 24px -22px rgba(15, 23, 42, 0.28);
 }
 
+/* Motion tokens — durations & easing (theme-independent). Springs live in
+   @recall/tokens (SPRING_UI / SPRING_POP) because CSS cannot express a spring.
+   Kept in :root (not @theme) so they do not collide with Tailwind's own
+   duration-*/ease-* utilities. */
+:root {
+  --duration-fast: 0.16s;
+  --duration-base: 0.2s;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
@@ -182,7 +193,7 @@ body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 160ms ease, color 160ms ease;
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 @layer base {
@@ -308,12 +319,81 @@ body {
   background-size: 400px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
-/* prefers-reduced-motion: collapse springs to instant/opacity-only */
+/* prefers-reduced-motion: reduced motion is not *no* feedback.
+   Stop looping/decorative keyframe animation (Atmosphere blobs, blob-spin,
+   float, pulse-ring, shimmer) and make keyframe entrances instant, but KEEP
+   opacity/color transitions — the theme-change fade, hover tints, and action
+   reveals aid comprehension and are not vestibular. Framer-motion/JS springs
+   can't be reached from CSS, so they collapse to opacity-only via
+   useReducedMotion() in the components themselves. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* prefers-reduced-transparency: users who ask the OS for less see-through UI.
+   We push token-driven glass surfaces toward opaque and drop their blur. NOTE:
+   this only reaches CLASS/token-driven surfaces — many components set
+   `backdrop-filter`/translucent `background` via INLINE styles (e.g. the shell
+   header, AppShell surfaces), which a stylesheet cannot override. Those must be
+   handled in the components themselves; this block does what is feasible from
+   CSS. Springs/JS are unaffected — this is transparency, not motion. */
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  html[data-theme="light"] {
+    --tk-glass: rgba(255,255,255,0.97);
+    --tk-glass-edge: rgba(255,255,255,0.98);
+    --color-glass: rgba(255,255,255,0.97);
+  }
+  html[data-theme="dark"] {
+    --tk-glass: rgba(25,25,32,0.97);
+    --tk-glass-edge: rgba(255,255,255,0.16);
+    --color-glass: rgba(25,25,32,0.97);
+  }
+  /* Drop blur on class-based glass surfaces (inline backdrop-filter can't be
+     reached from here — see note above). */
+  .landing-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* prefers-contrast: more — give glass/borders a defined, near-solid fallback so
+   edges and surfaces stay legible. Conservative: bump border/line alpha and
+   raise surface opacity rather than repainting the palette. */
+@media (prefers-contrast: more) {
+  :root,
+  html[data-theme="light"] {
+    --tk-glass: rgba(255,255,255,0.92);
+    --tk-glass-edge: rgba(11,18,32,0.28);
+    --color-glass: rgba(255,255,255,0.92);
+    --tk-line: rgba(11,18,32,0.22);
+    --app-border-soft: rgba(11,18,32,0.22);
+    --landing-border: rgba(15,23,42,0.42);
+    --landing-border-soft: rgba(15,23,42,0.28);
+  }
+  html[data-theme="dark"] {
+    --tk-glass: rgba(25,25,32,0.92);
+    --tk-glass-edge: rgba(255,255,255,0.3);
+    --color-glass: rgba(25,25,32,0.92);
+    --tk-line: rgba(240,242,248,0.24);
+    --app-border-soft: rgba(240,242,248,0.24);
+    --landing-border: rgba(255,255,255,0.32);
+    --landing-border-soft: rgba(255,255,255,0.22);
+  }
+}
+
+/* Touch/coarse-pointer hover gating: Tailwind's `hover:` fires on tap for
+   coarse pointers, so movement hovers (translate/scale) "stick" after a tap.
+   Elements whose hover MOVES carry `.no-touch-lift`; here we neutralise the
+   transform when there is no true hover. Only affects movement — color/shadow
+   hovers are left intact. */
+@media (not (hover: hover)), (pointer: coarse) {
+  .no-touch-lift {
+    transform: none !important;
   }
 }
 

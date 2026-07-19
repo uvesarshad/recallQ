@@ -1,8 +1,8 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Bot, X, Send, Sparkles } from "lucide-react";
-import { T, FONT, MONO } from "@recall/tokens";
+import { T, FONT, MONO, SPRING_UI } from "@recall/tokens";
 
 interface Citation {
   id: string;
@@ -22,13 +22,6 @@ const INIT_MSG: Msg = {
   text: 'Ask me anything in your archive — try "that paper on RAG chunking" or "the cold brew recipe."',
 };
 
-const FLOAT_KEYFRAMES = `
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-7px); }
-}
-`;
-
 export default function ChatDock() {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([INIT_MSG]);
@@ -37,14 +30,19 @@ export default function ChatDock() {
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const reduce = useReducedMotion();
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [msgs]);
+    bottomRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+  }, [msgs, reduce]);
 
   useEffect(() => {
     if (open) {
-      setTimeout(() => inputRef.current?.focus(), 320);
+      // Focus as soon as the panel is laid out — no fixed timer tied to the
+      // entrance spring, so the field is usable immediately (and stays
+      // interruptible) rather than locked out until the animation finishes.
+      const id = requestAnimationFrame(() => inputRef.current?.focus());
+      return () => cancelAnimationFrame(id);
     }
   }, [open]);
 
@@ -165,17 +163,15 @@ export default function ChatDock() {
 
   return (
     <>
-      <style>{FLOAT_KEYFRAMES}</style>
-
       {/* Floating bot button */}
       <AnimatePresence>
         {!open && (
           <motion.button
             key="chat-fab"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 24 }}
+            initial={reduce ? { opacity: 0 } : { scale: 0.9, opacity: 0 }}
+            animate={reduce ? { opacity: 1 } : { scale: 1, opacity: 1 }}
+            exit={reduce ? { opacity: 0 } : { scale: 0.9, opacity: 0 }}
+            transition={SPRING_UI}
             onClick={() => setOpen(true)}
             aria-label="Open AI chat"
             style={{
@@ -193,7 +189,7 @@ export default function ChatDock() {
               justifyContent: "center",
               background: "linear-gradient(135deg,#3D7DFF,#22C9A8)",
               boxShadow: "0 12px 30px rgba(61,125,255,.4)",
-              animation: "float 3.5s ease-in-out infinite",
+              animation: reduce ? undefined : "float 3.5s ease-in-out infinite",
             }}
           >
             <Bot size={26} color="#fff" />
@@ -206,10 +202,10 @@ export default function ChatDock() {
         {open && (
           <motion.div
             key="chat-panel"
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.85, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 260, damping: 28 }}
+            initial={reduce ? { opacity: 0 } : { scale: 0.85, opacity: 0 }}
+            animate={reduce ? { opacity: 1 } : { scale: 1, opacity: 1 }}
+            exit={reduce ? { opacity: 0 } : { scale: 0.85, opacity: 0 }}
+            transition={SPRING_UI}
             style={{
               position: "fixed",
               bottom: 22,
@@ -319,9 +315,13 @@ export default function ChatDock() {
                 gap: 10,
               }}
             >
+              <AnimatePresence initial={false}>
               {msgs.map((m, i) => (
-                <div
+                <motion.div
                   key={i}
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={reduce ? { duration: 0.12 } : SPRING_UI}
                   style={{
                     alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                     maxWidth: "84%",
@@ -368,7 +368,10 @@ export default function ChatDock() {
 
                   {/* Citations */}
                   {m.citations && m.citations.length > 0 && (
-                    <div
+                    <motion.div
+                      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={reduce ? { duration: 0.12 } : SPRING_UI}
                       style={{
                         display: "flex",
                         flexWrap: "wrap",
@@ -377,9 +380,16 @@ export default function ChatDock() {
                         paddingRight: m.role === "user" ? 2 : 0,
                       }}
                     >
-                      {m.citations.map((c) => (
-                        <button
+                      {m.citations.map((c, ci) => (
+                        <motion.button
                           key={c.id}
+                          initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={
+                            reduce
+                              ? { duration: 0.12 }
+                              : { ...SPRING_UI, delay: ci * 0.04 }
+                          }
                           onClick={() => {
                             window.location.href = "/app?q=" + encodeURIComponent(c.id);
                           }}
@@ -400,12 +410,13 @@ export default function ChatDock() {
                           }}
                         >
                           {c.snippet ? c.snippet.slice(0, 40) + "…" : c.title}
-                        </button>
+                        </motion.button>
                       ))}
-                    </div>
+                    </motion.div>
                   )}
-                </div>
+                </motion.div>
               ))}
+              </AnimatePresence>
 
               {/* Loading dots when waiting for first token */}
               {loading && msgs[msgs.length - 1]?.role !== "bot" && (
@@ -489,7 +500,7 @@ export default function ChatDock() {
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
-                  transition: "background 0.2s",
+                  transition: "background var(--duration-base) var(--ease-out)",
                   opacity: loading || !val.trim() ? 0.5 : 1,
                 }}
               >

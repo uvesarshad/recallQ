@@ -44,7 +44,7 @@ export default function EmailAddressCopy({ address }: { address: string }) {
           fontWeight: 700,
           cursor: "pointer",
           flexShrink: 0,
-          transition: "all 0.2s",
+          transition: "background var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out)",
         }}
       >
         {copied ? (

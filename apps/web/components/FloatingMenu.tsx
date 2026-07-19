@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Rss, LayoutGrid, Settings } from "lucide-react";
-import { T, FONT } from "@recall/tokens";
+import { T, FONT, SPRING_UI } from "@recall/tokens";
 
 const NAV_ITEMS = [
   { href: "/app", label: "Feed", icon: Rss },
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
 export default function FloatingMenu() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const reduce = useReducedMotion();
 
   return (
     <div
@@ -28,7 +29,7 @@ export default function FloatingMenu() {
     >
       <motion.button
         type="button"
-        whileTap={{ scale: 0.92 }}
+        whileTap={reduce ? undefined : { scale: 0.92 }}
         onClick={() => setOpen((prev) => !prev)}
         aria-label={open ? "Close menu" : "Open menu"}
         style={{
@@ -53,10 +54,10 @@ export default function FloatingMenu() {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ scale: 0.9, y: -8, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            exit={{ scale: 0.9, y: -8, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            initial={reduce ? { opacity: 0 } : { scale: 0.9, y: -8, opacity: 0 }}
+            animate={reduce ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
+            exit={reduce ? { opacity: 0 } : { scale: 0.9, y: -8, opacity: 0 }}
+            transition={SPRING_UI}
             style={{
               position: "absolute",
               top: 54,
@@ -93,7 +94,7 @@ export default function FloatingMenu() {
                     fontWeight: active ? 700 : 500,
                     color: active ? T.azure : T.inkSoft,
                     background: active ? "rgba(61,125,255,.1)" : "transparent",
-                    transition: "background 0.15s, color 0.15s",
+                    transition: "background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
                   }}
                 >
                   <Icon size={16} />

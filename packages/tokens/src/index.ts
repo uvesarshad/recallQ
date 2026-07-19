@@ -48,3 +48,26 @@ export const CSS = {
 
 export const FONT = "'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif";
 export const MONO = "'Geist Mono', ui-monospace, 'SF Mono', monospace";
+
+// ── Motion ────────────────────────────────────────────────────────
+// Single source of truth for durations and easing. Keep interactive UI
+// transitions under ~200ms; use a strong ease-out for enter/response and
+// ease-in-out for on-screen A→B movement. Mirrored as CSS custom properties
+// (--duration-*, --ease-*) in globals.css / tokens.css for CSS call sites.
+export const MOTION = {
+  duration: {
+    fast: "0.16s", // press feedback, hovers, color changes
+    base: "0.2s", // dropdowns, small popovers, image reveals
+  },
+  ease: {
+    out: "cubic-bezier(0.23, 1, 0.32, 1)", // strong ease-out — enter / response
+    inOut: "cubic-bezier(0.77, 0, 0.175, 1)", // on-screen A→B movement
+  },
+} as const;
+
+// Framer-motion spring presets. Reserve springs for interactive/gesture motion.
+// SPRING_UI: critically damped, no overshoot — the default for menus, panels,
+// cards, and hover lifts. SPRING_POP: a little bounce — only for momentum or
+// celebratory motion, never for something that merely faded in.
+export const SPRING_UI = { type: "spring", stiffness: 300, damping: 30 } as const;
+export const SPRING_POP = { type: "spring", stiffness: 320, damping: 22 } as const;

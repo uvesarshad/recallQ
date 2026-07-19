@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { SPRING_UI } from "@recall/tokens";
 import {
   AlertTriangle,
   Archive,
@@ -167,8 +169,7 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
   }, [onClose, open]);
 
   const containerRef = useModalA11y(open);
-
-  if (!open) return null;
+  const reduce = useReducedMotion();
 
   async function handleCommentSubmit() {
     if (!comment.trim() || loading) return;
@@ -347,48 +348,57 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
     .filter(Boolean);
 
   return (
-    // Overlay
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          setDeletePending(false);
-          onClose();
-        }
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 80,
-        display: "grid",
-        placeItems: "center",
-        background: "rgba(11,18,32,.28)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        padding: 18,
-        animation: "fadeIn .25s ease",
-      }}
-    >
-      {/* Modal box */}
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="item-detail-title"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 540,
-          maxHeight: "88vh",
-          overflowY: "auto",
-          borderRadius: 24,
-          background: "rgba(255,255,255,.82)",
-          backdropFilter: "blur(28px)",
-          WebkitBackdropFilter: "blur(28px)",
-          border: `1px solid ${T.glassEdge}`,
-          boxShadow: T.shadowLift,
-          animation: "popIn .35s cubic-bezier(.2,1.1,.3,1)",
-        }}
-      >
+    <AnimatePresence>
+      {open && (
+        // Overlay
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setDeletePending(false);
+              onClose();
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 80,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(11,18,32,.28)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            padding: 18,
+          }}
+        >
+          {/* Modal box */}
+          <motion.div
+            ref={containerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="item-detail-title"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+            animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+            transition={SPRING_UI}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 540,
+              maxHeight: "88vh",
+              overflowY: "auto",
+              borderRadius: 24,
+              background: "rgba(255,255,255,.82)",
+              backdropFilter: "blur(28px)",
+              WebkitBackdropFilter: "blur(28px)",
+              border: `1px solid ${T.glassEdge}`,
+              boxShadow: T.shadowLift,
+              transformOrigin: "center",
+            }}
+          >
         {/* Delete confirmation banner */}
         {deletePending ? (
           <div
@@ -1532,8 +1542,10 @@ export default function ItemDetailModal({ itemId, open, onClose }: ItemDetailMod
             </div>
           </div>
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

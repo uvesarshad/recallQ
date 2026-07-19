@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { Sparkles, Plus } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { dispatchArchiveItemCreated } from "@/lib/archive-events";
-import { T, FONT } from "@recall/tokens";
+import { T, FONT, SPRING_UI } from "@recall/tokens";
 
 export default function CaptureBar() {
   const [value, setValue] = useState("");
@@ -13,6 +13,7 @@ export default function CaptureBar() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
   const router = useRouter();
+  const reduce = useReducedMotion();
 
   const active = focused || value.length > 0;
 
@@ -78,8 +79,8 @@ export default function CaptureBar() {
 
   return (
     <motion.div
-      animate={{ scale: active ? 1.012 : 1 }}
-      transition={{ type: "spring", stiffness: 280, damping: 26 }}
+      animate={reduce ? undefined : { scale: active ? 1.012 : 1 }}
+      transition={SPRING_UI}
       style={{ width: "100%", maxWidth: 640 }}
     >
       <div
@@ -100,7 +101,7 @@ export default function CaptureBar() {
             : T.shadowSoft,
           padding: "0 8px 0 14px",
           transition:
-            "border 0.2s, box-shadow 0.2s",
+            "border var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out)",
         }}
       >
         <Sparkles
@@ -108,7 +109,7 @@ export default function CaptureBar() {
           style={{
             flexShrink: 0,
             color: active ? T.azure : T.inkFaint,
-            transition: "color 0.3s",
+            transition: "color var(--duration-base) var(--ease-out)",
           }}
         />
 
@@ -140,7 +141,7 @@ export default function CaptureBar() {
 
         <motion.button
           type="button"
-          whileTap={{ scale: 0.96 }}
+          whileTap={reduce ? undefined : { scale: 0.96 }}
           onClick={() => void handleSave()}
           disabled={loading || !value.trim()}
           style={{
@@ -162,7 +163,7 @@ export default function CaptureBar() {
             boxShadow: "0 6px 16px rgba(61,125,255,.32)",
             cursor: loading || !value.trim() ? "not-allowed" : "pointer",
             opacity: loading || !value.trim() ? 0.5 : 1,
-            transition: "background 0.3s, opacity 0.2s",
+            transition: "background var(--duration-base) var(--ease-out), opacity var(--duration-base) var(--ease-out)",
           }}
         >
           <Plus size={16} />
